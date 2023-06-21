@@ -67,7 +67,7 @@ class SequentialCIFAR10(ContinualDataset):
     N_CLASSES_PER_TASK = 2
     N_TASKS = 5
     TRANSFORM = transforms.Compose(
-            [transforms.RandomCrop(32, padding=4),
+            [transforms.RandomCrop(32, padding=4), #TODO: remove
              transforms.RandomHorizontalFlip(),
              transforms.ToTensor(),
              transforms.Normalize((0.4914, 0.4822, 0.4465),

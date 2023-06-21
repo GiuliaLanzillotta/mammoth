@@ -7,12 +7,13 @@ import random
 import torch
 import numpy as np
 
-def get_device() -> torch.device:
+def get_device(gpuid:int) -> torch.device:
     """
     Returns the GPU device if available else CPU.
     """
-    if torch.cuda.is_available():
-        return torch.device("cuda:0")
+
+    if torch.cuda.is_available() and gpuid>=0:
+        return torch.device(gpuid)
     try:
         if torch.backends.mps.is_available() and torch.backends.mps.is_built():
             return torch.device("mps")
@@ -25,13 +26,13 @@ def base_path() -> str:
     """
     Returns the base bath where to log accuracies and tensorboard data.
     """
-    return './data/'
+    return './logs/'
 
 def base_path_dataset() -> str:
     """
-    Returns the base bath where to log accuracies and tensorboard data.
+    Returns the base path where to log accuracies and tensorboard data.
     """
-    return '/tmp/mammoth_datasets/'
+    return './data/'
 
 
 def set_random_seed(seed: int) -> None:

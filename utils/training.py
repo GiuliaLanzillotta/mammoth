@@ -88,7 +88,11 @@ def train(model: ContinualModel, dataset: ContinualDataset,
 
     if not args.nowand:
         assert wandb is not None, "Wandb not installed, please install it or run without wandb"
-        wandb.init(project=args.wandb_project, entity=args.wandb_entity, config=vars(args))
+        if args.wandb_name is None: 
+            name = str.join("-",[dataset.SETTING, dataset.NAME, model.NAME, args.conf_timestamp])
+        else: name = args.wandb_name
+        wandb.init(project=args.wandb_project, entity=args.wandb_entity, 
+                   name=name, notes=args.notes, config=vars(args)) #TODO: filtering config variables
         args.wandb_url = wandb.run.get_url()
 
     model.net.to(model.device)
@@ -124,7 +128,7 @@ def train(model: ContinualModel, dataset: ContinualDataset,
             if args.model == 'joint':
                 continue
             for i, data in enumerate(train_loader):
-                if args.debug_mode and i > 3:
+                if args.debug_mode and i > 3: # only 3 batches in debug mode
                     break
                 if hasattr(dataset.train_loader.dataset, 'logits'):
                     inputs, labels, not_aug_inputs, logits = data

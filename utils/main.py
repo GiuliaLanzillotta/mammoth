@@ -49,6 +49,7 @@ def parse_args():
     parser.add_argument('--load_best_args', action='store_true',
                         help='Loads the best arguments for each method, '
                              'dataset and memory buffer.')
+    #TODO 
     torch.set_num_threads(4)
     add_management_args(parser)
     args = parser.parse_known_args()[0]
@@ -65,9 +66,9 @@ def parse_args():
         if args.model == 'joint':
             best = best_args[args.dataset]['sgd']
         else:
-            best = best_args[args.dataset][args.model]
+            best = best_args[args.dataset][args.model] # for every new model we need to have args for every dataset
         if hasattr(mod, 'Buffer'):
-            best = best[args.buffer_size]
+            best = best[args.buffer_size] # and for every buffer size
         else:
             best = best[-1]
         get_parser = getattr(mod, 'get_parser')
@@ -93,7 +94,7 @@ def main(args=None):
     if args is None:
         args = parse_args()
 
-    os.putenv("MKL_SERVICE_FORCE_INTEL", "1")
+    os.putenv("MKL_SERVICE_FORCE_INTEL", "1") #CHECK
     os.putenv("NPY_MKL_FORCE_INTEL", "1")
 
     # Add uuid, timestamp and hostname for logging
@@ -113,7 +114,7 @@ def main(args=None):
     loss = dataset.get_loss()
     model = get_model(args, backbone, loss, dataset.get_transform())
 
-    if args.distributed == 'dp':
+    if args.distributed == 'dp': #CHECK: probably call to cuda:0 does not work
         model.net = make_dp(model.net)
         model.to('cuda:0')
         args.conf_ngpus = torch.cuda.device_count()
