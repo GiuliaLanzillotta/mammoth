@@ -3,6 +3,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import math
 import sys
 from argparse import Namespace
 from contextlib import suppress
@@ -14,6 +15,10 @@ from torch.optim import SGD
 
 from utils.conf import get_device
 from utils.magic import persistent_locals
+from utils.status import ProgressBar
+
+from torch.utils.data import DataLoader
+
 
 with suppress(ImportError):
     import wandb
@@ -68,6 +73,38 @@ class ContinualModel(nn.Module):
         :return: the value of the loss function
         """
         raise NotImplementedError
+
+    # def train_on_task(self, train_loader:DataLoader, 
+    #                   scheduler:torch.optim.lr_scheduler._LRScheduler, 
+    #                   progress_bar:ProgressBar): 
+    #     """
+    #     Compute a full training cycle through a task. 
+    #     :param train_loader: training data loader
+    #     :param 
+    #     """
+    #     for epoch in range(self.args.n_epochs):
+    #         if self.args.model == 'joint':
+    #             continue
+    #         for i, data in enumerate(train_loader):
+    #             if self.args.debug_mode and i > 3: # only 3 batches in debug mode
+    #                 break
+    #             if hasattr(train_loader.dataset, 'logits'):
+    #                 inputs, labels, not_aug_inputs, logits = data
+    #                 inputs = inputs.to(self.device)
+    #                 labels = labels.to(self.device)
+    #                 not_aug_inputs = not_aug_inputs.to(self.device)
+    #                 logits = logits.to(self.device)
+    #                 loss = self.meta_observe(inputs, labels, not_aug_inputs, logits)
+    #             else:
+    #                 inputs, labels, not_aug_inputs = data
+    #                 inputs, labels = inputs.to(self.device), labels.to(self.device)
+    #                 not_aug_inputs = not_aug_inputs.to(self.device)
+    #                 loss = self.meta_observe(inputs, labels, not_aug_inputs)
+    #             assert not math.isnan(loss)
+    #             progress_bar.prog(i, len(train_loader), epoch, t, loss)
+
+    #         if scheduler is not None:
+    #             scheduler.step()
 
     def autolog_wandb(self, locals):
         """

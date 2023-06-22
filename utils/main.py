@@ -59,7 +59,7 @@ def parse_args():
         parser.add_argument('--dataset', type=str, required=True,
                             choices=DATASET_NAMES,
                             help='Which dataset to perform experiments on.')
-        if hasattr(mod, 'Buffer'):
+        if hasattr(mod, 'Buffer') or hasattr(mod, 'buffer'):
             parser.add_argument('--buffer_size', type=int, required=True,
                                 help='The size of the memory buffer.')
         args = parser.parse_args()
@@ -67,7 +67,7 @@ def parse_args():
             best = best_args[args.dataset]['sgd']
         else:
             best = best_args[args.dataset][args.model] # for every new model we need to have args for every dataset
-        if hasattr(mod, 'Buffer'):
+        if hasattr(mod, 'Buffer') or hasattr(mod, 'buffer'):
             best = best[args.buffer_size] # and for every buffer size
         else:
             best = best[-1]
@@ -114,7 +114,7 @@ def main(args=None):
     loss = dataset.get_loss()
     model = get_model(args, backbone, loss, dataset.get_transform())
 
-    if args.distributed == 'dp': #CHECK: probably call to cuda:0 does not work
+    if args.distributed == 'dp': #CHECK: call to cuda:0 problematic
         model.net = make_dp(model.net)
         model.to('cuda:0')
         args.conf_ngpus = torch.cuda.device_count()

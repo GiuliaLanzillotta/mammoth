@@ -174,6 +174,36 @@ class Buffer:
             return ret_tuple
         else:
             return (torch.tensor(choice).to(self.device), ) + ret_tuple
+    
+    def get_data_balanced(self, size: int, task_number:int, transform: nn.Module = None) -> Tuple:
+        """
+        Random samples a batch of size items, with an equal number of samples from each task.
+        :param size: the number of requested items
+        :param transform: the transformation to be applied (data augmentation)
+        :return:
+        """
+        if size > min(self.num_seen_examples, self.examples.shape[0]):
+            size = min(self.num_seen_examples, self.examples.shape[0])
+
+        task_size = size//task_number # 
+        if transform is None:
+            def transform(x): return x
+        
+        choice = np.asarray([])
+        for t in range(task_number): 
+            task_indices = (self.task_labels.cpu().numpy()==t).nonzero()[0]
+            task_choice = np.random.choice(task_indices, size=task_size, replace=False)
+            choice=np.concatenate([choice,task_choice], axis=0) 
+        
+        ret_tuple = (torch.stack([transform(ee.cpu())
+                                  for ee in self.examples[choice]]).to(self.device),)
+        for attr_str in self.attributes[1:]:
+            if hasattr(self, attr_str):
+                attr = getattr(self, attr_str)
+                ret_tuple += (attr[choice],)
+
+        return ret_tuple
+    
 
     def get_data_by_index(self, indexes, transform: nn.Module = None) -> Tuple:
         """

@@ -69,6 +69,8 @@ class RingBuffer:
                 if task_labels is not None:
                     self.task_labels[index] = task_labels[i].to(self.device)
 
+
+    #Note: to get all the populated data, but shuffled it's enough to provide size>buffer size
     def get_data(self, size: int, transform: transforms = None) -> Tuple:
         """
         Random samples a batch of size items.
@@ -84,6 +86,37 @@ class RingBuffer:
         choice = np.random.choice(populated_portion_length, size=size, replace=False)
         if transform is None:
             def transform(x): return x
+        ret_tuple = (torch.stack([transform(ee.cpu())
+                                  for ee in self.examples[choice]]).to(self.device),)
+        for attr_str in self.attributes[1:]:
+            if hasattr(self, attr_str):
+                attr = getattr(self, attr_str)
+                ret_tuple += (attr[choice],)
+
+        return ret_tuple
+    
+    def get_data_balanced(self, size: int, transform: transforms = None) -> Tuple:
+        """
+        Random samples a batch of size items, with an equal number of samples from each task.
+        :param size: the number of requested items
+        :param transform: the transformation to be applied (data augmentation)
+        :return:
+        """
+        populated_portion_length = (self.labels != -1).sum().item()
+
+        if size > populated_portion_length:
+            size = populated_portion_length
+
+        task_size = size//self.task_number # 
+        if transform is None:
+            def transform(x): return x
+        
+        choice = np.asarray([])
+        for t in range(self.task_number): 
+            task_indices = list(range(t*self.buffer_portion_size,(t+1)*self.buffer_portion_size))
+            task_choice = np.random.choice(task_indices, size=task_size, replace=False)
+            choice=np.concatenate([choice,task_choice], axis=0) 
+        
         ret_tuple = (torch.stack([transform(ee.cpu())
                                   for ee in self.examples[choice]]).to(self.device),)
         for attr_str in self.attributes[1:]:
@@ -117,6 +150,7 @@ class RingBuffer:
                 attr = getattr(self, attr_str)
                 ret_tuple += (attr,)
         return ret_tuple
+    
 
     def empty(self) -> None:
         """

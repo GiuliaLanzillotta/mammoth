@@ -18,6 +18,10 @@ def get_parser() -> ArgumentParser:
     add_rehearsal_args(parser)
     parser.add_argument('--alpha', type=float, required=True,
                         help='Penalty weight.')
+    parser.add_argument('--probabilities', type=bool,  default=False, action="store_true",
+                        help='Distillation at the probabilities level.')
+    parser.add_argument('--temp', type=float,  default=0.1, 
+                        help='Softmax temperature for probability-based distillation.')
     return parser
 
 
@@ -27,6 +31,7 @@ class Der(ContinualModel):
 
     def __init__(self, backbone, loss, args, transform):
         super(Der, self).__init__(backbone, loss, args, transform)
+        self.use_prob = self.args.probabilities
         self.buffer = Buffer(self.args.buffer_size, self.device)
 
     def observe(self, inputs, labels, not_aug_inputs):
@@ -40,10 +45,19 @@ class Der(ContinualModel):
             buf_inputs, buf_logits = self.buffer.get_data(
                 self.args.minibatch_size, transform=self.transform)
             buf_outputs = self.net(buf_inputs)
+            #TODO: change loss here: apply activation to both
+            if self.use_prob: 
+                #TODO: customise activation function
+                buf_outputs = F.softmax(buf_outputs); buf_logits = F.softmax(buf_logits)
             loss += self.args.alpha * F.mse_loss(buf_outputs, buf_logits)
 
         loss.backward()
         self.opt.step()
+        #TODO: add logits data only when the nextwork is trained... 
         self.buffer.add_data(examples=not_aug_inputs, logits=outputs.data)
 
         return loss.item()
+    
+    def end_task(self, dataset): 
+        """ Store the logits at the end of training ..."""
+        pass
