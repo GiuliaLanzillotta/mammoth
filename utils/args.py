@@ -42,6 +42,8 @@ def add_management_args(parser: ArgumentParser) -> None:
                         help='GPU device identifier. Negative value means cpu-only')
     parser.add_argument('--seed', type=int, default=None,
                         help='The random seed.')
+    # parser.add_argument('--all_seeds', default=False, action="store_true",
+    #                     help='Runs the same experiment with 10 different random seeds.')
     parser.add_argument('--notes', type=str, default=None,
                         help='Notes for this run.')
     parser.add_argument('--non_verbose', default=0, choices=[0, 1], type=int, help='Make progress bars non verbose')

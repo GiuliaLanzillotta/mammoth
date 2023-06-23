@@ -62,7 +62,7 @@ def parse_args():
         if hasattr(mod, 'Buffer') or hasattr(mod, 'buffer'):
             parser.add_argument('--buffer_size', type=int, required=True,
                                 help='The size of the memory buffer.')
-        args = parser.parse_args()
+        args = parser.parse_known_args()[0]
         if args.model == 'joint':
             best = best_args[args.dataset]['sgd']
         else:

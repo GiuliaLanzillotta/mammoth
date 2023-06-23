@@ -25,9 +25,6 @@ class TEr(ContinualModel): # TaskEr
     def __init__(self, backbone, loss, args, transform):
         super(TEr, self).__init__(backbone, loss, args, transform)
 
-        # dd = get_dataset(args)
-        # self.n_tasks = dd.N_TASKS
-        # self.cpt = dd.N_CLASSES_PER_TASK
         self.current_task=0
         self.buffer = Buffer(self.args.buffer_size, self.device)
 
