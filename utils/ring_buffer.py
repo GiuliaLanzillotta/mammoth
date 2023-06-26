@@ -45,6 +45,17 @@ class RingBuffer:
 
         self.labels -= 1
 
+    # def resize_task_portions(self):
+    #     """Uses the current task numbers to make space for a new task 
+    #     by deleting some of the old tasks data."""
+    #     if self.task_number==0: return
+    #     old_buffer_portion_size = self.buffer_size // self.task_number
+    #     buffer_portion_size = self.buffer_size // (self.task_number + 1)
+    #     for t in range(self.task_number):
+    #         old_0index = task*old_buffer_portion_size
+    #         new_0index = task*buffer_portion_size
+
+
     def add_data(self, examples, labels=None, logits=None, task_labels=None):
         """
         Adds the data to the memory buffer according to the reservoir strategy.
@@ -57,6 +68,7 @@ class RingBuffer:
         if not hasattr(self, 'examples'):
             self.init_tensors(examples, labels, logits, task_labels)
 
+        #buffer_portion_size = self.buffer_size // (self.task_number + 1)
         for i in range(examples.shape[0]):
             index = ring(self.num_seen_examples, self.buffer_portion_size, self.task_number)
             self.num_seen_examples += 1

@@ -3,8 +3,11 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import numpy as np
 import torch
 from torch.nn import functional as F
+
+import math
 
 from models.utils.continual_model import ContinualModel
 from utils.args import ArgumentParser, add_experiment_args, add_management_args, add_rehearsal_args
@@ -27,7 +30,7 @@ def get_parser() -> ArgumentParser:
 
 
 class TDer(ContinualModel):
-    NAME = 'der'
+    NAME = 'tder'
     COMPATIBILITY = ['class-il', 'domain-il', 'task-il']
 
     def __init__(self, backbone, loss, args, transform):
@@ -35,6 +38,7 @@ class TDer(ContinualModel):
         self.use_prob = self.args.probabilities
         self.current_task=0
         self.buffer = Buffer(self.args.buffer_size, self.device)
+
 
     def observe(self, inputs, labels, not_aug_inputs):
 
@@ -44,13 +48,14 @@ class TDer(ContinualModel):
         loss = self.loss(outputs, labels)
 
         if self.current_task > 0: # no replay while learning the first task.
-            buf_inputs, buf_logits, _ = self.buffer.get_data_balanced(
-                self.args.minibatch_size, self.current_task,  transform=self.transform)
+            buf_inputs, buf_logits, _ = self.buffer.get_data(
+                self.args.minibatch_size, transform=self.transform)
             buf_outputs = self.net(buf_inputs)
             if self.use_prob: 
                 #TODO: customise activation function
                 buf_outputs = F.softmax(buf_outputs); buf_logits = F.softmax(buf_logits/self.args.temp)
-            loss += self.args.alpha * F.mse_loss(buf_outputs, buf_logits)
+                loss += self.args.alpha * F.cross_entropy(buf_outputs, buf_logits)
+            else: loss += self.args.alpha * F.mse_loss(buf_outputs, buf_logits)
 
         loss.backward()
         self.opt.step()
@@ -66,7 +71,8 @@ class TDer(ContinualModel):
             inputs, labels, not_aug_inputs = data
             inputs, labels = inputs.to(self.device), labels.to(self.device)
             not_aug_inputs = not_aug_inputs.to(self.device)
-            outputs = self.net(inputs)
+            with torch.no_grad():
+                outputs = self.net(inputs)
             task_labels = torch.ones(inputs.shape[0])*self.current_task
             self.buffer.add_data(examples=not_aug_inputs, 
                                 logits=outputs.data,

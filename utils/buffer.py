@@ -72,7 +72,7 @@ def reservoir(num_seen_examples: int, buffer_size: int) -> int:
     if num_seen_examples < buffer_size:
         return num_seen_examples
 
-    rand = np.random.randint(0, num_seen_examples + 1)
+    rand = np.random.randint(0, num_seen_examples + 1) # probability of adding an example decreases with the number of tasks
     if rand < buffer_size:
         return rand
     else:
@@ -149,6 +149,12 @@ class Buffer:
                     self.logits[index] = logits[i].to(self.device)
                 if task_labels is not None:
                     self.task_labels[index] = task_labels[i].to(self.device)
+
+    def get_task_proportions(self, task_number:int):
+        """Given the current task number, it returns the relative proportion of each task in the buffer"""
+        if not hasattr(self, "task_labels"): return None
+        proportions = [np.sum((self.task_labels.cpu().numpy()==t))/self.buffer_size for t in range(task_number)]
+        return proportions
 
     def get_data(self, size: int, transform: nn.Module = None, return_index=False) -> Tuple:
         """

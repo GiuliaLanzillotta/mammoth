@@ -73,7 +73,7 @@ def parse_args():
             best = best[-1]
         get_parser = getattr(mod, 'get_parser')
         parser = get_parser()
-        to_parse = sys.argv[1:] + ['--' + k + '=' + str(v) for k, v in best.items()]
+        to_parse = ['--' + k + '=' + str(v) for k, v in best.items()] + sys.argv[1:] # this way the argv args can override the best args
         to_parse.remove('--load_best_args')
         args = parser.parse_args(to_parse)
         if args.model == 'joint' and args.dataset == 'mnist-360':

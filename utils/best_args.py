@@ -143,7 +143,7 @@ best_args = {
                    'n_epochs': 1}},
       'tder': {200: {'lr': 0.2,
                   'minibatch_size': 128,
-                  'alpha': 1.0,
+                  'alpha': 0.5,
                   'batch_size': 128,
                   'n_epochs': 1},
             500: {'lr': 0.2,

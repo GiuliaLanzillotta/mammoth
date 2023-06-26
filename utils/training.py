@@ -150,6 +150,7 @@ def train(model: ContinualModel, dataset: ContinualDataset,
                 scheduler.step()
 
         if hasattr(model, 'end_task'):
+            # TODO add saving model here?
             model.end_task(dataset)
 
         accs = evaluate(model, dataset)
@@ -163,10 +164,18 @@ def train(model: ContinualModel, dataset: ContinualDataset,
             logger.log(mean_acc)
             logger.log_fullacc(accs)
 
+        buffer_tp = None
+        if hasattr(model, 'Buffer') or hasattr(model, 'buffer'):
+            buffer_tp = model.buffer.get_task_proportions(t+1)
+
         if not args.nowand:
-            d2={'RESULT_class_mean_accs': mean_acc[0], 'RESULT_task_mean_accs': mean_acc[1],
+            d2={'RESULT_class_mean_accs': mean_acc[0], 
+                'RESULT_task_mean_accs': mean_acc[1],
                 **{f'RESULT_class_acc_{i}': a for i, a in enumerate(accs[0])},
                 **{f'RESULT_task_acc_{i}': a for i, a in enumerate(accs[1])}}
+
+            if buffer_tp is not None: 
+                d2.update(**{f'BUFFER_TASK_prop_{i}': p for (i,p) in enumerate(buffer_tp)})
 
             wandb.log(d2)
 
