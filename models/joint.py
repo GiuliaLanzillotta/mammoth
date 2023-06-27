@@ -34,14 +34,13 @@ class Joint(ContinualModel):
         self.current_task = 0
 
     def end_task(self, dataset):
-        if dataset.SETTING != 'domain-il':
+        if dataset.SETTING != 'domain-il': # sequential settings ... 
             self.old_data.append(dataset.train_loader.dataset.data)
             self.old_labels.append(torch.tensor(dataset.train_loader.dataset.targets))
             self.current_task += 1
 
             # # for non-incremental joint training
-            if len(dataset.test_loaders) != dataset.N_TASKS:
-                return
+            #if len(dataset.test_loaders) != dataset.N_TASKS: return
 
             # reinit network
             self.net = dataset.get_backbone()
@@ -78,13 +77,13 @@ class Joint(ContinualModel):
         else:
             self.old_data.append(dataset.train_loader)
             # train
-            if len(dataset.test_loaders) != dataset.N_TASKS:
-                return
+            #if len(dataset.test_loaders) != dataset.N_TASKS: return
 
+            
             all_inputs = []
             all_labels = []
             for source in self.old_data:
-                for x, l, _ in source:
+                for x, l, _ in source: # the train-loader adds the transformation
                     all_inputs.append(x)
                     all_labels.append(l)
             all_inputs = torch.cat(all_inputs)

@@ -125,8 +125,8 @@ def train(model: ContinualModel, dataset: ContinualDataset,
 
         scheduler = dataset.get_scheduler(model, args)
         for epoch in range(model.args.n_epochs):
-            if args.model == 'joint':
-                continue
+            if args.model in ['joint','joint2']:
+                break
             for i, data in enumerate(train_loader):
                 if args.debug_mode and i > 3: # only 3 batches in debug mode
                     break
