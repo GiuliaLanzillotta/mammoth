@@ -127,6 +127,7 @@ def train(model: ContinualModel, dataset: ContinualDataset,
         for epoch in range(model.args.n_epochs):
             if args.model in ['joint','joint2']:
                 break
+            avg_loss = 0.0
             for i, data in enumerate(train_loader):
                 if args.debug_mode and i > 3: # only 3 batches in debug mode
                     break
@@ -143,11 +144,18 @@ def train(model: ContinualModel, dataset: ContinualDataset,
                         model.device)
                     not_aug_inputs = not_aug_inputs.to(model.device)
                     loss = model.meta_observe(inputs, labels, not_aug_inputs)
+
                 assert not math.isnan(loss)
                 progress_bar.prog(i, len(train_loader), epoch, t, loss)
+                avg_loss += loss
 
             if scheduler is not None:
                 scheduler.step()
+
+            if not args.nowand and hasattr(model, 'fast_learner'):
+                df = {'epoch_loss':avg_loss/len(train_loader)}
+                wandb.log(df)
+
 
         if hasattr(model, 'end_task'):
             # TODO add saving model here?

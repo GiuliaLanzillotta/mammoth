@@ -28,6 +28,10 @@ def get_parser() -> ArgumentParser:
     add_rehearsal_args(parser)
     parser.add_argument('--buffer', default=False, action='store_true',
                         help='Whether to train the joint model on a buffer.')
+    parser.add_argument('--task_buffer', default=False, action='store_true',
+                        help='Whether to store logits in the buffer at the end of training.')
+    parser.add_argument('--alpha', type=float, default=0.5, required=True,
+                        help='The weight of labels vs logits in the distillation loss (when alpha=1 only true labels are used)')
     parser.add_argument('--reset_fl', default=False, action='store_true',
                         help='Whether to reset the fast learner at the beginning of each new task.')
     return parser
@@ -66,9 +70,9 @@ class JointDistill(ContinualModel):
         loss.backward()
         self.fast_opt.step()
 
-        if self.args.buffer:
+        if self.args.buffer and not self.args.task_buffer:
             self.buffer.add_data(examples=not_aug_inputs, # augmentations applied by the buffer 
-                             logits=outputs.data)
+                             logits=outputs.data, labels=labels)
 
         return loss.item()
 
@@ -81,17 +85,19 @@ class JointDistill(ContinualModel):
         self.net.to(self.device)
         self.net.train()
         self.opt = SGD(self.net.parameters(), lr=self.args.lr)
-        
+        alpha = self.args.alpha
         scheduler = dataset.get_scheduler(self, self.args)
 
         bs = self.args.minibatch_size
         for e in range(self.args.n_epochs):
             for i in range(int(math.ceil(self.args.buffer_size / bs))):
-                inputs, logits = self.buffer.get_data(bs, transform=self.transform)
-                inputs.to(self.device), logits.to(self.device)
+                inputs, labels, logits = self.buffer.get_data(bs, transform=self.transform)
+                inputs.to(self.device), logits.to(self.device), labels.to(self.device)
                 self.opt.zero_grad()
                 outputs = self.net(inputs)
-                loss = F.mse_loss(outputs, logits)
+                logits_loss = F.mse_loss(outputs, logits)
+                labels_loss = self.loss(outputs, labels)
+                loss = alpha*labels_loss + (1-alpha)*logits_loss
                 loss.backward()
                 self.opt.step()
                 progress_bar(i, int(math.ceil(self.args.buffer_size / bs)), e, 'JD', loss.item())
@@ -127,6 +133,7 @@ class JointDistill(ContinualModel):
         self.net.to(self.device)
         self.net.train()
         self.opt = SGD(self.net.parameters(), lr=self.args.lr)
+        alpha = self.args.alpha
     
         # prepare dataloader
         joint_dataset = ConcatDataset(self.old_datasets)
@@ -136,11 +143,13 @@ class JointDistill(ContinualModel):
         for e in range(self.args.n_epochs):
             for i, batch in enumerate(loader):
                 inputs, labels, _, logits = batch
-                inputs, logits = inputs.to(self.device), logits.to(self.device)
+                inputs, logits = inputs.to(self.device), logits.to(self.device), labels.to(self.device)
 
                 self.opt.zero_grad()
                 outputs = self.net(inputs)
-                loss = F.mse_loss(outputs, logits)
+                logits_loss = F.mse_loss(outputs, logits)
+                labels_loss = self.loss(outputs, labels)
+                loss = alpha*labels_loss + (1-alpha)*logits_loss
                 loss.backward()
                 self.opt.step()
                 progress_bar(i, len(loader), e, 'J', loss.item())
@@ -152,6 +161,21 @@ class JointDistill(ContinualModel):
 
     def end_task(self, dataset):
         """The full network learns the task now using the fast network outputs."""
+        if self.args.buffer and self.args.task_buffer: 
+            # we fill up the buffer at the end of the task training (using the trained fast network)
+            status = self.fast_learner.training
+            self.fast_learner.eval()
+
+            for i, data in enumerate(dataset.train_loader):
+                inputs, labels, not_aug_inputs = data
+                inputs, labels = inputs.to(self.device), labels.to(self.device)
+                not_aug_inputs = not_aug_inputs.to(self.device)
+                with torch.no_grad():
+                    outputs = self.fast_learner(inputs)
+                self.buffer.add_data(examples=not_aug_inputs, 
+                                    logits=outputs.data, labels=labels)
+                
+            self.fast_learner.train(status)
 
         if self.args.buffer: self.slow_learn_buffer(dataset)
         else: self.slow_learn_full(dataset)
