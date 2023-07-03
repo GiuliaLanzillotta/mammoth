@@ -143,7 +143,7 @@ class JointDistill(ContinualModel):
         for e in range(self.args.n_epochs):
             for i, batch in enumerate(loader):
                 inputs, labels, _, logits = batch
-                inputs, logits = inputs.to(self.device), logits.to(self.device), labels.to(self.device)
+                inputs, logits, labels = inputs.to(self.device), logits.to(self.device), labels.to(self.device)
 
                 self.opt.zero_grad()
                 outputs = self.net(inputs)

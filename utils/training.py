@@ -76,6 +76,7 @@ def evaluate(model: ContinualModel, dataset: ContinualDataset, last=False) -> Tu
     return accs, accs_mask_classes
 
 
+
 def train(model: ContinualModel, dataset: ContinualDataset,
           args: Namespace) -> None:
     """
