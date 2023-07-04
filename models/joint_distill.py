@@ -92,7 +92,7 @@ class JointDistill(ContinualModel):
         for e in range(self.args.n_epochs):
             for i in range(int(math.ceil(self.args.buffer_size / bs))):
                 inputs, labels, logits = self.buffer.get_data(bs, transform=self.transform)
-                inputs.to(self.device), logits.to(self.device), labels.to(self.device)
+                inputs, labels, logits = inputs.to(self.device), logits.to(self.device), labels.to(self.device)
                 self.opt.zero_grad()
                 outputs = self.net(inputs)
                 logits_loss = F.mse_loss(outputs, logits)
