@@ -29,6 +29,7 @@ for model in get_all_models():
         c = getattr(mod, d)
         NAMES[c.NAME] = c
 
+from datasets.cifar5m import *
 
 def get_dataset(args: Namespace) -> ContinualDataset:
     """
