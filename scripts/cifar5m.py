@@ -58,7 +58,8 @@ except ImportError:
 buffer_args = {
               1000:{
                   'alpha':0.0,
-                  'n_epochs':50  
+                  'n_epochs':50,
+                  'lr':0.01  
               }  
         }
 
