@@ -58,7 +58,7 @@ except ImportError:
 buffer_args = {
               1000:{
                   'alpha':0.0,
-                  'n_epochs':20  
+                  'n_epochs':50  
               }  
         }
 
@@ -153,8 +153,8 @@ data.load()
 train_dataset = Cifar5M(cifar5m_root, data, train=True)
 val_dataset = Cifar5M(cifar5m_root, data, train=False)
 # filling in default hyperparameters
-if args.n_epochs is None: args.n_epochs = 90
-if args.batch_size is None: args.batch_size = 32
+if args.n_epochs is None: args.n_epochs = 10
+if args.batch_size is None: args.batch_size = 128
 if args.lr is None: args.lr = 0.1
 
 # initialising the model
@@ -191,8 +191,8 @@ buffer = Buffer(args.buffer_size, device) # reservoir sampling during learning
 
 if not args.pretrained:
         model.train()
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.1, weight_decay=1e-4, momentum=0.9)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
+        optimizer = torch.optim.SGD(model.parameters(), lr=0.1, weight_decay=0.0, momentum=0.0)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.n_epochs)
         results = []
         best_acc = 0.
         start_epoch = 0
@@ -306,8 +306,8 @@ print("Starting buffer training ... ")
 if args.n_epochs is None: args.n_epochs = 90
 if args.batch_size is None: args.batch_size = 32
 if args.lr is None: args.lr = 0.01
-if args.optim_wd is None: args.optim_wd = 1e-4
-if args.optim_mom is None: args.optim_mom = 0.9
+if args.optim_wd is None: args.optim_wd = 0.0
+if args.optim_mom is None: args.optim_mom = 0.0
 # re-initialise model 
 buffer_model = resnet18(nclasses=10, nf=64)
 buffer_model.to(device)
@@ -320,7 +320,7 @@ val_loader = DataLoader(
         val_dataset, batch_size=args.batch_size, shuffle=False,
         num_workers=3, pin_memory=True)
 optimizer = torch.optim.SGD(buffer_model.parameters(), lr=args.lr, weight_decay=args.optim_wd, momentum=args.optim_mom)
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.n_epochs)
 
 results = []
 alpha = args.alpha
@@ -354,13 +354,13 @@ for e in range(args.n_epochs):
                 scheduler.step()
         
         train_acc = (correct/total) * 100
-        val_acc = evaluate(model, val_loader, device)
+        val_acc = evaluate(buffer_model, val_loader, device)
         results.append(val_acc)
 
         print('\Train accuracy : {} %'.format(round(train_acc, 2)), file=sys.stderr)
         print('\Val accuracy : {} %'.format(round(val_acc, 2)), file=sys.stderr)
         
-        df = {'epoch_loss_S':avg_loss/len(train_loader),
+        df = {'epoch_loss_S':avg_loss,
               'epoch_train_acc_S':train_acc,
               'epoch_val_acc_S':val_acc}
         wandb.log(df)
