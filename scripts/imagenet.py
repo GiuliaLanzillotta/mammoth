@@ -1,6 +1,11 @@
 # Giulia Lanzillotta . 04.07.2023
 # Imagenet offline training experiment script (no continual structure)
 
+#Resources
+# https://github.com/pytorch/examples/blob/main/imagenet/main.py 
+# https://pytorch.org/vision/0.8/datasets.html#imagenet
+# https://www.image-net.org/about.php 
+
 
 import importlib
 import math
@@ -75,6 +80,12 @@ buffer_args = {
                   'batch_size':64, #TODO: tune
                   'validate_subset':5000,
                   'lr':0.1
+              } ,
+              100000:{
+                  'n_epochs':90,
+                  'batch_size':64, #TODO: tune
+                  'validate_subset':5000,
+                  'lr':0.1
               } 
         }
 
@@ -93,9 +104,9 @@ def load_checkpoint(best=False, filename='checkpoint.pth.tar'):
     if os.path.exists(filepath):
           print(f"Loading existing checkpoint {filepath}")
           checkpoint = torch.load(filepath)
-          if filename=='checkpoint_90.pth.tar': # modify Sidak's checkpoint
-                new_state_dict = {k.replace('module.','',1):v for (k,v) in checkpoint['state_dict'].items()}
-                checkpoint['state_dict'] = new_state_dict
+        #   if filename=='checkpoint_90.pth.tar': # modify Sidak's checkpoint
+        #         new_state_dict = {k.replace('module.','',1):v for (k,v) in checkpoint['state_dict'].items()}
+        #         checkpoint['state_dict'] = new_state_dict
           return checkpoint
     return None 
 
@@ -214,6 +225,10 @@ if not args.nowand:
                         name=name, notes=args.notes, config=vars(args)) 
         args.wandb_url = wandb.run.get_url()
 device = get_device(args.gpuid)
+if args.distributed=='dp': 
+      print(f"Parallelising training on {torch.cuda.device_count()} GPUs.")
+      device = 0
+      model = torch.nn.DataParallel(model).cuda()
 model.to(device)
 progress_bar = ProgressBar(verbose=not args.non_verbose)
 
@@ -304,18 +319,27 @@ if not args.pretrained:
                         }, is_best, filename=chkpt_name)
 
 #val_acc = evaluate(model, val_loader, device)          
-val_acc = checkpoint['best_acc1']
-df = {'final_val_acc_D':val_acc}
+final_val_acc_D = checkpoint['best_acc1']
+df = {'final_val_acc_D':final_val_acc_D}
 wandb.log(df)
 
 print(f"Randomly drawing {args.buffer_size} samples")
 model.eval() # set the main model to evaluation
-random_indices = np.random.choice(range(len(train_dataset)), 
+all_indices = set(range(len(train_dataset)))
+random_indices = np.random.choice(list(all_indices), 
                                 size=args.buffer_size, replace=False)
+left_out_indices = all_indices.difference(set(random_indices.flatten()))
 train_subset = Subset(train_dataset, random_indices)
 buffer_loader =  DataLoader(train_subset, 
                                 batch_size=args.batch_size, 
-                                shuffle=False, num_workers=4, 
+                                shuffle=True, 
+                                num_workers=4, 
+                                pin_memory=True)
+train_leftout_subset = Subset(train_dataset, list(left_out_indices))
+train_leftout_loader = DataLoader(train_leftout_subset, 
+                                batch_size=args.batch_size, 
+                                shuffle=False, 
+                                num_workers=4, 
                                 pin_memory=False)
 
 # if not args.noisy_buffer:
@@ -341,21 +365,21 @@ buffer_loader =  DataLoader(train_subset,
 
 
 args = parse_args(buffer=True)
-# dumping everything into a log file
-path = base_path() + "results" + "/" + "imagenet" + "/" + "resnet50" 
-if not os.path.exists(path): os.makedirs(path)
-with open(path+ "/logs.pyd", 'a') as f:
-        f.write(str(vars(args)) + '\n')
+experiment_log = vars(args)
+experiment_log['final_val_acc_D'] = final_val_acc_D
 
 
 
 print("Starting buffer training ... ")
 # re-initialise model 
-buffer_model = resnet50(weights=None).to(device)
+buffer_model = resnet50(weights=None)
+if args.distributed=='dp': 
+      print(f"Parallelising buffer training on {torch.cuda.device_count()} GPUs.")
+      buffer_model = torch.nn.DataParallel(buffer_model).cuda()
+buffer_model.to(device)
 buffer_model.train()
-val_loader = DataLoader(
-        val_dataset, batch_size=args.batch_size, shuffle=False,
-        num_workers=3, pin_memory=True)
+val_loader = DataLoader(val_dataset, batch_size=args.batch_size, 
+                        shuffle=False, num_workers=3, pin_memory=True)
 
 optimizer = torch.optim.SGD(buffer_model.parameters(), 
                             lr=args.lr, 
@@ -393,21 +417,35 @@ for e in range(args.n_epochs):
                 scheduler.step()
         
         train_acc = (correct/total) * 100
+        train_leftout_acc = evaluate(buffer_model, train_leftout_loader, device, num_samples=args.validate_subset)
         val_acc = evaluate(buffer_model, val_loader, device, num_samples=args.validate_subset)
         results.append(val_acc)
 
         print('\nTrain accuracy : {} %'.format(round(train_acc, 2)), file=sys.stderr)
+        print('\nTrain left-out accuracy : {} %'.format(round(train_leftout_acc, 2)), file=sys.stderr)
         print('\Val accuracy : {} %'.format(round(val_acc, 2)), file=sys.stderr)
         
         df = {'epoch_loss_S':avg_loss,
               'epoch_train_acc_S':train_acc,
+              'epoch_train_leftout_acc_S':train_leftout_acc,
               'epoch_val_acc_S':val_acc}
         wandb.log(df)
+
+
+print("Training completed. Full evaluation and logging...")
+experiment_log['final_train_acc_S'] = train_acc
+train_leftout_acc = evaluate(buffer_model, train_leftout_loader, device)
+val_acc = evaluate(buffer_model, val_loader, device)
+experiment_log['final_train_leftout_acc_S'] = train_leftout_acc
+experiment_log['final_val_acc_S'] = val_acc
+
 
 if not args.nowand:
         wandb.finish()
 
 
-# https://github.com/pytorch/examples/blob/main/imagenet/main.py 
-# https://pytorch.org/vision/0.8/datasets.html#imagenet
-# https://www.image-net.org/about.php 
+# dumping everything into a log file
+path = base_path() + "results" + "/" + "imagenet" + "/" + "resnet50" 
+if not os.path.exists(path): os.makedirs(path)
+with open(path+ "/logs.pyd", 'a') as f:
+        f.write(str(experiment_log) + '\n')
