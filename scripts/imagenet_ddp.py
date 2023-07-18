@@ -39,6 +39,10 @@ from torch.utils.data import Dataset, DataLoader, Subset
 from torchvision.datasets import ImageNet, ImageFolder
 from torchvision.models import efficientnet_v2_s, resnet50, ResNet50_Weights, resnet18
 import torchvision.transforms as transforms
+import torch.distributed as dist
+import torch.multiprocessing as mp
+
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 from datasets import NAMES as DATASET_NAMES
 from datasets import ContinualDataset, get_dataset
@@ -60,7 +64,7 @@ except ImportError:
 
 buffer_args = {
                 'n_epochs':90,
-                'batch_size':256, 
+                'batch_size':256, #TODO: tune
                 'validate_subset':5000,
                 'lr':0.1
                 }
@@ -73,16 +77,16 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
     if is_best:
         shutil.copyfile(filename, path+'model_best.pth.tar')
 
-def load_checkpoint(best=False, filename='checkpoint.pth.tar', distributed=False):
+def load_checkpoint(map_location, best=False, filename='checkpoint.pth.tar'):
     path = base_path() + "/chkpts" + "/" + "imagenet" + "/" + "resnet50/"
     if best: filepath = path + 'model_best.pth.tar'
     else: filepath = path + filename
     if os.path.exists(filepath):
           print(f"Loading existing checkpoint {filepath}")
-          checkpoint = torch.load(filepath)
-          if filename=='checkpoint_90.pth.tar' and not distributed: # modify Sidak's checkpoint
-                new_state_dict = {k.replace('module.','',1):v for (k,v) in checkpoint['state_dict'].items()}
-                checkpoint['state_dict'] = new_state_dict
+          checkpoint = torch.load(filepath, map_location=map_location)
+        #   if filename=='checkpoint_90.pth.tar': # modify Sidak's checkpoint
+        #         new_state_dict = {k.replace('module.','',1):v for (k,v) in checkpoint['state_dict'].items()}
+        #         checkpoint['state_dict'] = new_state_dict
           return checkpoint
     return None 
 
@@ -111,6 +115,15 @@ def evaluate(model, val_loader, device, num_samples=-1):
     model.train(status)
     return acc
 
+def setup(rank, world_size):
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = '12355'
+
+    # initialize the process group
+    dist.init_process_group("gloo", rank=rank, world_size=world_size)
+
+def cleanup():
+    dist.destroy_process_group()
 
 
 def parse_args(buffer=False):
@@ -151,6 +164,116 @@ def parse_args(buffer=False):
     return args
 
 
+def train_teacher_and_student(rank, world_size, args):
+        setup(rank, world_size)
+        # initialising the model
+        weights = None
+        if args.pretrained: 
+                print("Loading pretrained weights...")
+                weights = ResNet50_Weights.IMAGENET1K_V2
+        model = resnet50(weights=weights).to(args.gpus_id[rank])
+        model = DDP(model, device_ids=[args.gpus_id[rank]])
+
+        device = args.gpus_id[rank] 
+        progress_bar = ProgressBar(verbose=not args.non_verbose)
+        buffer = Buffer(args.buffer_size, device) # reservoir sampling during learning
+
+
+        if not args.pretrained:
+                model.train()
+                optimizer = torch.optim.SGD(model.parameters(), 
+                                    lr=args.lr, 
+                                    weight_decay=args.optim_wd, 
+                                    momentum=args.optim_mom)
+                scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
+                results = []
+                best_acc = 0.
+                start_epoch = 0
+
+
+                if args.checkpoints: 
+                        chkpt_name = f"checkpoint_90.pth.tar" #sidak's checkpoint
+                        checkpoint = load_checkpoint(map_location={'cuda:%d' % 0: 'cuda:%d' % rank}, 
+                                                     best=False, filename=chkpt_name) 
+                        model.load_state_dict(checkpoint['state_dict'])
+                        model.to(device)
+                        optimizer.load_state_dict(checkpoint['optimizer'])
+                        scheduler.load_state_dict(checkpoint['scheduler'])
+                        start_epoch = checkpoint['epoch']
+                        best_acc1 = checkpoint['best_acc1']
+
+
+                for epoch in range(start_epoch, args.n_epochs):
+                        avg_loss = 0.0
+                        correct, total = 0.0, 0.0
+                        for i, data in enumerate(train_loader):
+                                if args.debug_mode and i > 3: # only 3 batches in debug mode
+                                        break
+                                inputs, labels = data
+                                inputs, labels = inputs.to(device), labels.to(device)
+                                outputs = model(inputs)
+                                _, pred = torch.max(outputs.data, 1)
+                                correct += torch.sum(pred == labels).item()
+                                total += labels.shape[0]
+                                loss = F.cross_entropy(outputs, labels) #TODO: maybe MSE?
+                                loss.backward()
+                                optimizer.step()
+
+                                assert not math.isnan(loss)
+                                progress_bar.prog(i, len(train_loader), epoch, 'D', loss)
+                                avg_loss += loss
+
+                                if args.noisy_buffer:             
+                                        buffer.add_data(examples=inputs, logits=outputs.data, labels=labels)
+
+                        if scheduler is not None:
+                                scheduler.step()
+                        
+                        train_acc = correct/total * 100
+                        val_acc = evaluate(model, val_loader, device, num_samples=args.validate_subset)
+                        results.append(val_acc)
+
+                        # best val accuracy -> selection bias on the validation set
+                        is_best = val_acc > best_acc
+                        best_acc = max(val_acc, best_acc)
+
+                        print('\Train accuracy : {} %'.format(round(train_acc, 2)), file=sys.stderr)
+                        print('\Val accuracy : {} %'.format(round(val_acc, 2)), file=sys.stderr)
+                        
+                        df = {'epoch_loss_D':avg_loss/len(train_loader),
+                                'epoch_train_acc_D':train_acc,
+                                'epoch_val_acc_D':val_acc}
+                        wandb.log(df)
+
+
+                if args.checkpoints: 
+                        save_checkpoint({
+                        'epoch': epoch + 1,
+                        'state_dict': model.state_dict(),
+                        'best_acc': best_acc,
+                        'optimizer' : optimizer.state_dict(),
+                        'scheduler' : scheduler.state_dict()
+                        }, is_best, filename=chkpt_name)
+
+                #val_acc = evaluate(model, val_loader, device)          
+                final_val_acc_D = checkpoint['best_acc1']
+                df = {'final_val_acc_D':final_val_acc_D}
+                wandb.log(df)
+        
+
+        cleanup()
+
+
+
+def run_demo(fn, world_size, args):
+    world_size = len(args.gpus_id)
+    mp.spawn(fn,
+             args=(world_size,args,),
+             nprocs=world_size,
+             join=True)
+
+
+
 args = parse_args()
 # Add uuid, timestamp and hostname for logging
 args.conf_jobnum = str(uuid.uuid4())
@@ -161,7 +284,6 @@ args.conf_host = socket.gethostname()
 imagenet_root = "/local/home/stuff/imagenet/"
 normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                  std=[0.229, 0.224, 0.225])
-
 
 train_transform = transforms.Compose([
                             transforms.RandomResizedCrop(224),
@@ -179,13 +301,16 @@ inference_transform = transforms.Compose([
 train_dataset = ImageFolder(imagenet_root+'train', train_transform)
 val_dataset = ImageFolder(imagenet_root+'val', inference_transform)
 
+print(file=sys.stderr)
+train_loader = DataLoader(
+        train_dataset, batch_size=args.batch_size, shuffle=True,
+        num_workers=4, pin_memory=True)
+val_loader = DataLoader(
+        val_dataset, batch_size=args.batch_size, shuffle=False,
+        num_workers=4, pin_memory=True)
 
-# initialising the model
-weights = None
-if args.pretrained: 
-      print("Loading pretrained weights...")
-      weights = ResNet50_Weights.IMAGENET1K_V2
-model = resnet50(weights=weights)
+
+
 
 #TODO: data parallel switch
 setproctitle.setproctitle('{}_{}_{}'.format("resnet50", args.buffer_size if 'buffer_size' in args else 0, "imagenet"))
@@ -200,103 +325,10 @@ if not args.nowand:
         wandb.init(project=args.wandb_project, entity=args.wandb_entity, 
                         name=name, notes=args.notes, config=vars(args)) 
         args.wandb_url = wandb.run.get_url()
-device = get_device(args.gpus_id) # returns the first device in the list
-if args.distributed=='dp': 
-      print(f"Parallelising training on {len(args.gpus_id)} GPUs.")
-      model = torch.nn.DataParallel(model, device_ids=args.gpus_id).cuda()
-model.to(device)
-progress_bar = ProgressBar(verbose=not args.non_verbose)
 
 
-print(file=sys.stderr)
-train_loader = DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=True,
-        num_workers=4, pin_memory=True)
-val_loader = DataLoader(
-        val_dataset, batch_size=args.batch_size, shuffle=False,
-        num_workers=4, pin_memory=True)
-
-buffer = Buffer(args.buffer_size, device) # reservoir sampling during learning
-
-if not args.pretrained:
-        model.train()
-        optimizer = torch.optim.SGD(model.parameters(), 
-                                    lr=args.lr, 
-                                    weight_decay=args.optim_wd, 
-                                    momentum=args.optim_mom)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
-        results = []
-        best_acc = 0.
-        start_epoch = 0
 
 
-        if args.checkpoints: 
-                chkpt_name = f"checkpoint_90.pth.tar" #sidak's checkpoint
-                checkpoint = load_checkpoint(best=False, filename=chkpt_name, distributed=not args.distributed=='no') #TODO: switch best off
-                model.load_state_dict(checkpoint['state_dict'])
-                model.to(device)
-                optimizer.load_state_dict(checkpoint['optimizer'])
-                scheduler.load_state_dict(checkpoint['scheduler'])
-                start_epoch = checkpoint['epoch']
-                best_acc1 = checkpoint['best_acc1']
-
-
-        for epoch in range(start_epoch, args.n_epochs):
-                avg_loss = 0.0
-                correct, total = 0.0, 0.0
-                for i, data in enumerate(train_loader):
-                        if args.debug_mode and i > 3: # only 3 batches in debug mode
-                                break
-                        inputs, labels = data
-                        inputs, labels = inputs.to(device), labels.to(device)
-                        outputs = model(inputs)
-                        _, pred = torch.max(outputs.data, 1)
-                        correct += torch.sum(pred == labels).item()
-                        total += labels.shape[0]
-                        loss = F.cross_entropy(outputs, labels) #TODO: maybe MSE?
-                        loss.backward()
-                        optimizer.step()
-
-                        assert not math.isnan(loss)
-                        progress_bar.prog(i, len(train_loader), epoch, 'D', loss)
-                        avg_loss += loss
-
-                        if args.noisy_buffer:             
-                                buffer.add_data(examples=inputs, logits=outputs.data, labels=labels)
-
-                if scheduler is not None:
-                        scheduler.step()
-                
-                train_acc = correct/total * 100
-                val_acc = evaluate(model, val_loader, device, num_samples=args.validate_subset)
-                results.append(val_acc)
-
-                # best val accuracy -> selection bias on the validation set
-                is_best = val_acc > best_acc
-                best_acc = max(val_acc, best_acc)
-
-                print('\Train accuracy : {} %'.format(round(train_acc, 2)), file=sys.stderr)
-                print('\Val accuracy : {} %'.format(round(val_acc, 2)), file=sys.stderr)
-                
-                df = {'epoch_loss_D':avg_loss/len(train_loader),
-                'epoch_train_acc_D':train_acc,
-                'epoch_val_acc_D':val_acc}
-                wandb.log(df)
-
-
-                if args.checkpoints: 
-                        save_checkpoint({
-                        'epoch': epoch + 1,
-                        'state_dict': model.state_dict(),
-                        'best_acc': best_acc,
-                        'optimizer' : optimizer.state_dict(),
-                        'scheduler' : scheduler.state_dict()
-                        }, is_best, filename=chkpt_name)
-
-#val_acc = evaluate(model, val_loader, device)          
-final_val_acc_D = checkpoint['best_acc1']
-df = {'final_val_acc_D':final_val_acc_D}
-wandb.log(df)
 
 print(f"Randomly drawing {args.buffer_size} samples")
 model.eval() # set the main model to evaluation
@@ -399,7 +431,7 @@ for e in range(args.n_epochs):
 
         print('\nTrain accuracy : {} %'.format(round(train_acc, 2)), file=sys.stderr)
         print('Train left-out accuracy : {} %'.format(round(train_leftout_acc, 2)), file=sys.stderr)
-        print('\Val accuracy : {} %'.format(round(val_acc, 2)), file=sys.stderr)
+        print('Val accuracy : {} %'.format(round(val_acc, 2)), file=sys.stderr)
         
         df = {'epoch_loss_S':avg_loss,
               'epoch_train_acc_S':train_acc,
@@ -413,7 +445,7 @@ end = time.time()
 
 experiment_log['buffer_train_time'] = end-start
 experiment_log['final_train_acc_S'] = train_acc
-train_leftout_acc = evaluate(buffer_model, train_leftout_loader, device, num_samples=len(val_loader)) #restricting the number of samples otw it takes ages
+train_leftout_acc = evaluate(buffer_model, train_leftout_loader, device)
 val_acc = evaluate(buffer_model, val_loader, device)
 experiment_log['final_train_leftout_acc_S'] = train_leftout_acc
 experiment_log['final_val_acc_S'] = val_acc

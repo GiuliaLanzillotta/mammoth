@@ -38,8 +38,8 @@ def add_experiment_args(parser: ArgumentParser) -> None:
 
 
 def add_management_args(parser: ArgumentParser) -> None:
-    parser.add_argument('--gpuid', type=int, default=-1,
-                        help='GPU device identifier. Negative value means cpu-only')
+    parser.add_argument('--gpus_id', nargs="+", type=int, default=[],
+                        help='GPU devices identifier. Empty list means CPU only.')
     parser.add_argument('--seed', type=int, default=None,
                         help='The random seed.')
     # parser.add_argument('--all_seeds', default=False, action="store_true",

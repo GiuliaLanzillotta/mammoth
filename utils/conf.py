@@ -7,13 +7,13 @@ import random
 import torch
 import numpy as np
 
-def get_device(gpuid:int) -> torch.device:
+def get_device(gpus_id:list) -> torch.device:
     """
-    Returns the GPU device if available else CPU.
+    Returns the GPU device corresponding to the first list index if available else CPU.
     """
 
-    if torch.cuda.is_available() and gpuid>=0:
-        return torch.device(gpuid)
+    if torch.cuda.is_available() and len(gpus_id)>0:
+        return torch.device(gpus_id[0])
     try:
         if torch.backends.mps.is_available() and torch.backends.mps.is_built():
             return torch.device("mps")
