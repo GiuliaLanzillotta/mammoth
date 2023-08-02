@@ -349,27 +349,6 @@ train_leftout_loader = DataLoader(train_leftout_subset,
                                 num_workers=4, 
                                 pin_memory=False)
 
-# if not args.noisy_buffer:
-#       print(f"Filling up the buffer with {args.buffer_size} samples ...")
-#       #fill-up the buffer now (when the standard model is trained)
-#       status = model.training
-#       model.eval()
-#       random_indices = np.random.choice(range(len(train_dataset)), 
-#                                         size=args.buffer_size, replace=False)
-#       train_subset = Subset(train_dataset, random_indices)
-#       temp_loader =  DataLoader(train_subset, 
-#                                 batch_size=args.batch_size, 
-#                                 shuffle=False, num_workers=4, 
-#                                 pin_memory=False)
-#       for i, data in enumerate(temp_loader):
-#                 inputs, labels = data
-#                 inputs, labels = inputs.to(device), labels.to(device)
-#                 with torch.no_grad():
-#                     outputs = model(inputs)
-#                 buffer.add_data(examples=inputs, logits=outputs.data, labels=labels)      
-#       model.train(status)
-
-
 
 args = parse_args(buffer=True)
 experiment_log = vars(args)

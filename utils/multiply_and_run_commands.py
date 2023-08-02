@@ -13,11 +13,10 @@ sys.path.append(mammoth_path + '/models')
 sys.path.append(mammoth_path + '/utils')
 
 SEEDS = [11,13,21,33,55,5,138,228,196,118]
-BUFFER_SIZES = [1200, 12000, 60000, 120000, 240000]
+BUFFER_SIZES = [360000, 480000] #1200, 12000, 60000
 NUM_GPUS_PER_COMMAND = 1 
 PARALLEL_ORDER = 4
-GPUIDS = [1,2,3,4]
-
+GPUIDS = [0,1,3,4]
 
 def crange(start, end, modulo):
     # implementing circular range
@@ -43,12 +42,13 @@ for buf_size in BUFFER_SIZES:
             new_argv.append(f'--buffer_size {buf_size} ')
             new_argv.append(f'--seed {seed} ')
             new_argv.append(f'--alpha {alpha}')
-            next_gpu = (gpu_count+NUM_GPUS_PER_COMMAND)%(len(GPUIDS)+1)
-            new_argv.append('--gpus_id '+ \
-                " ".join([str(GPUIDS[c]) for c in \
-                crange(gpu_count,next_gpu,len(GPUIDS))])) 
+            new_argv.append(f'--gpus_id {GPUIDS[job_count]}')
+            # next_gpu = (gpu_count+NUM_GPUS_PER_COMMAND)%(len(GPUIDS))
+            # new_argv.append('--gpus_id '+ \
+            #     " ".join([str(GPUIDS[c]) for c in \
+            #     crange(gpu_count,next_gpu,len(GPUIDS))])) 
             job_count+=1
-            gpu_count=next_gpu
+            # gpu_count=next_gpu
             all_commands.append(" ".join(new_argv[1:]))
             if job_count==PARALLEL_ORDER:
                 subprocess.run(["utils/run_multiple_commands.sh"]+all_commands)
