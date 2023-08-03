@@ -65,6 +65,8 @@ buffer_args = {
                 'lr':0.1
                 }
 
+LOGITS_MAGNITUDE_TEACHER = 19.9
+
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
     path = base_path() + "/chkpts" + "/" + "imagenet" + "/" + "resnet50/"
@@ -135,6 +137,8 @@ def parse_args(buffer=False):
                         help='The weight of labels vs logits in the distillation loss (when alpha=1 only true labels are used)')
     parser.add_argument('--noisy_buffer', default=False, action='store_true',
                         help='Whether to store logits in the buffer at the end of training.')
+    parser.add_argument('--MSE', default=False, action='store_true',
+                        help='If provided, the MSE loss is used for the student with labels .')
     args = parser.parse_known_args()[0]
 
     if buffer:
@@ -379,7 +383,10 @@ for e in range(args.n_epochs):
                 correct += torch.sum(pred == labels).item()
                 total += labels.shape[0]
                 logits_loss = F.mse_loss(outputs, logits)
-                labels_loss = F.cross_entropy(outputs, labels)
+                if args.MSE: 
+                      labels_loss = F.mse_loss(outputs, labels) * LOGITS_MAGNITUDE_TEACHER # Bobby's correction
+                else:
+                      labels_loss = F.cross_entropy(outputs, labels)
                 loss = alpha*labels_loss + (1-alpha)*logits_loss
                 loss.backward()
                 optimizer.step()
