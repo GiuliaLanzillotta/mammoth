@@ -12,11 +12,11 @@ sys.path.append(mammoth_path + '/backbone')
 sys.path.append(mammoth_path + '/models')
 sys.path.append(mammoth_path + '/utils')
 
-SEEDS = [11,13,21,33,55,5,138,228,196,118]
-BUFFER_SIZES = [360000, 480000] #1200, 12000, 60000
+SEEDS = [21,33,55,5,138,228,196,118]#[11,13]#
+BUFFER_SIZES = [480000]#, 480000]#[60000]#[360000, 480000] #1200, 12000, 60000
 NUM_GPUS_PER_COMMAND = 1 
 PARALLEL_ORDER = 4
-GPUIDS = [0,1,3,4]
+GPUIDS = [1, 2, 3, 4]
 
 def crange(start, end, modulo):
     # implementing circular range
@@ -36,7 +36,7 @@ gpu_count=0
 job_count=0
 
 for buf_size in BUFFER_SIZES: 
-    for alpha in [0.0,1.0]:
+    for alpha in [0.0]:
         for seed in SEEDS:
             new_argv = copy(sys.argv)
             new_argv.append(f'--buffer_size {buf_size} ')
@@ -54,3 +54,5 @@ for buf_size in BUFFER_SIZES:
                 subprocess.run(["utils/run_multiple_commands.sh"]+all_commands)
                 all_commands=[]
                 job_count=0
+
+# python utils/multiply_and_run_commands.py python scripts/imagenet.py  --validate_subset 2000 --batch_size 64 --checkpoints --MSE --notes imagenet-script-all-exp --wandb_project DataEfficientDistillation

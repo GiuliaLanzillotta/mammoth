@@ -8,6 +8,7 @@
 
 
 import importlib
+import json
 import math
 import os
 import socket
@@ -59,13 +60,13 @@ except ImportError:
 
 
 buffer_args = {
-                'n_epochs':90,
+                'n_epochs_stud':90,
                 'batch_size':256, 
                 'validate_subset':5000,
                 'lr':0.1
                 }
 
-LOGITS_MAGNITUDE_TEACHER = 19.9
+LOGITS_MAGNITUDE_TEACHER = 14.5#19.9
 
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
@@ -123,9 +124,13 @@ def parse_args(buffer=False):
     parser.add_argument('--checkpoints', action='store_true', help='Storing a checkpoint at every epoch. Loads a checkpoint if present.')
     parser.add_argument('--pretrained', action='store_true', help='Using a pre-trained network instead of training one.')
     parser.add_argument('--optim_wd', type=float, default=1e-4, help='optimizer weight decay.')
+    parser.add_argument('--optim_adam', default=False, action='store_true', help='Using the Adam optimizer instead of SGD.')
     parser.add_argument('--optim_mom', type=float, default=0.9, help='optimizer momentum.')
+    parser.add_argument('--optim_warmup', type=int, default=0, help='Number of warmup epochs.')
     parser.add_argument('--optim_nesterov', type=int, default=0, help='optimizer nesterov momentum.')
+    parser.add_argument('--optim_cosineanneal', default=False, action='store_true', help='Enabling cosine annealing of learning rate..')
     parser.add_argument('--n_epochs', type=int, default=90, help='Number of epochs.')
+    parser.add_argument('--n_epochs_stud', type=int, default=90, help='Number of student epochs.')
     parser.add_argument('--batch_size', type=int, default = 256, help='Batch size.')
     parser.add_argument('--validate_subset', type=int, default=-1, 
                         help='If positive, allows validating on random subsets of the validation dataset during training.')
@@ -206,7 +211,7 @@ if not args.nowand:
         args.wandb_url = wandb.run.get_url()
 device = get_device(args.gpus_id) # returns the first device in the list
 if args.distributed=='dp': 
-      print(f"Parallelising training on {len(args.gpus_id)} GPUs.")
+      print(f"Parallelising training on {len(args.gpus_id)} GPUs.") 
       model = torch.nn.DataParallel(model, device_ids=args.gpus_id).cuda()
 model.to(device)
 progress_bar = ProgressBar(verbose=not args.non_verbose)
@@ -225,9 +230,9 @@ buffer = Buffer(args.buffer_size, device) # reservoir sampling during learning
 if not args.pretrained:
         model.train()
         optimizer = torch.optim.SGD(model.parameters(), 
-                                    lr=args.lr, 
-                                    weight_decay=args.optim_wd, 
-                                    momentum=args.optim_mom)
+                                lr=args.lr, 
+                                weight_decay=args.optim_wd, 
+                                momentum=args.optim_mom)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
         results = []
         best_acc = 0.
@@ -345,7 +350,7 @@ train_leftout_loader = DataLoader(train_leftout_subset,
 
 args = parse_args(buffer=True)
 experiment_log = vars(args)
-experiment_log['final_val_acc_D'] = final_val_acc_D.detach().cpu().numpy()
+experiment_log['final_val_acc_D'] = final_val_acc_D.detach().item()
 
 
 
@@ -360,15 +365,28 @@ buffer_model.to(device)
 buffer_model.train()
 val_loader = DataLoader(val_dataset, batch_size=args.batch_size, 
                         shuffle=False, num_workers=3, pin_memory=True)
-
-optimizer = torch.optim.SGD(buffer_model.parameters(), 
+if not args.optim_adam:
+        optimizer = torch.optim.SGD(buffer_model.parameters(), 
                             lr=args.lr, 
                             weight_decay=args.optim_wd, 
                             momentum=args.optim_mom)
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
+else: 
+        optimizer = torch.optim.Adam(buffer_model.parameters(), 
+                                        lr = args.lr, 
+                                        weight_decay=args.optim_wd)
+if not args.optim_cosineanneal: 
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
+else: 
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.n_epochs_stud-args.optim_warmup)
+if args.optim_warmup > 0: 
+       # initialise warmup scheduler
+        warmup_scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=0.01, total_iters=args.optim_warmup)
+        scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, 
+                                                          schedulers=[warmup_scheduler, scheduler], 
+                                                          milestones=[args.optim_warmup])
 results = []
 alpha = args.alpha
-for e in range(args.n_epochs):
+for e in range(args.n_epochs_stud):
         if args.debug_mode and e > 3: # only 3 batches in debug mode
                 break
         avg_loss = 0.0
@@ -384,7 +402,7 @@ for e in range(args.n_epochs):
                 total += labels.shape[0]
                 logits_loss = F.mse_loss(outputs, logits)
                 if args.MSE: 
-                      labels_loss = F.mse_loss(outputs, labels) * LOGITS_MAGNITUDE_TEACHER # Bobby's correction
+                      labels_loss = F.mse_loss(outputs, F.one_hot(labels, num_classes=1000).to(torch.float) * LOGITS_MAGNITUDE_TEACHER)  # Bobby's correction
                 else:
                       labels_loss = F.cross_entropy(outputs, labels)
                 loss = alpha*labels_loss + (1-alpha)*logits_loss
@@ -433,5 +451,5 @@ if not args.nowand:
 # dumping everything into a log file
 path = base_path() + "results" + "/" + "imagenet" + "/" + "resnet50" 
 if not os.path.exists(path): os.makedirs(path)
-with open(path+ "/logs.pyd", 'a') as f:
-        f.write(str(experiment_log) + '\n')
+with open(path+ "/logs.txt", 'a') as f:
+        f.write(json.dumps(experiment_log) + '\n')
