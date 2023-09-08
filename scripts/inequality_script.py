@@ -143,8 +143,8 @@ for k in range(NUM_SAMPLES_F):
 
             sum1_delta += l_delta.sum()
             sum2_delta += (l_delta**2).sum()
-            sum1_ce = l_ce.sum()
-            sum2_ce = (l_ce**2).sum()
+            sum1_ce += l_ce.sum()
+            sum2_ce += (l_ce**2).sum()
 
             total += labels.shape[0]
 
@@ -158,9 +158,9 @@ for k in range(NUM_SAMPLES_F):
     ce_var = (sum2_ce/total - (sum1_ce/total)**2)*(total/(total-1))
 
     inequality_log = {}
-    inequality_log['deltaV'] = delta_var
-    inequality_log['deltaM'] = sum1_delta/total
-    inequality_log['ceV'] = ce_var
+    inequality_log['deltaV'] = delta_var.item()
+    inequality_log['deltaM'] = (sum1_delta/total).item()
+    inequality_log['ceV'] = ce_var.item()
 
     with open(path+ "/LVI.txt", 'a') as f:
             f.write(json.dumps(inequality_log) + '\n')
