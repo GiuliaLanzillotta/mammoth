@@ -36,6 +36,7 @@ import torch
 
 from PIL import Image
 import torch.nn.functional as F
+import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader, Subset
 from torchvision.datasets import ImageNet, ImageFolder
 from torchvision.models import efficientnet_v2_s, resnet50, ResNet50_Weights, resnet18
@@ -52,6 +53,7 @@ from utils.conf import set_random_seed, get_device
 from utils.loggers import *
 from utils.status import ProgressBar
 from utils.buffer import Buffer
+from utils.stil_losses import *
 
 try:
     import wandb
@@ -63,7 +65,8 @@ buffer_args = {
                 'n_epochs_stud':90,
                 'batch_size':256, 
                 'validate_subset':5000,
-                'lr':0.1
+                'lr':0.1,
+                'distillation_type':'vanilla'
                 }
 
 LOGITS_MAGNITUDE_TEACHER = 14.5#19.9
@@ -144,6 +147,10 @@ def parse_args(buffer=False):
                         help='Whether to store logits in the buffer at the end of training.')
     parser.add_argument('--MSE', default=False, action='store_true',
                         help='If provided, the MSE loss is used for the student with labels .')
+    parser.add_argument('--distillation_type', type=str, default='vanilla', choices=['vanilla', 'topK', 'inner'],
+                        help='Selects the distillation type, which determines the distillation loss.')
+    parser.add_argument('--K', type=int, default=100, help='Number of activations to look at for *topK* distillation loss.')
+    
     args = parser.parse_known_args()[0]
 
     if buffer:
@@ -384,6 +391,33 @@ if args.optim_warmup > 0:
         scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, 
                                                           schedulers=[warmup_scheduler, scheduler], 
                                                           milestones=[args.optim_warmup])
+        
+
+
+if args.distillation_type == 'inner':
+        # registering forward hooks in the teacher and student networks 
+        activation_teacher = {}
+        def get_activation_teacher(name):
+                def hook(model, input, output):
+                        activation_teacher[name] = output
+                return hook
+        for n,m in model.named_children():
+                if not isinstance(m, nn.ReLU):
+                        print(f'Registering hook for {n} *teacher')
+                        m.register_forward_hook(get_activation_teacher(n))
+
+        activation_student= {}
+        def get_activation_student(name):
+                def hook(model, input, output):
+                        activation_student[name] = output
+                return hook
+
+        for n,m in buffer_model.named_children():
+                if not isinstance(m, nn.ReLU):
+                        print(f'Registering hook for {n} *student')
+                        m.register_forward_hook(get_activation_student(n))
+
+
 results = []
 alpha = args.alpha
 for e in range(args.n_epochs_stud):
@@ -392,6 +426,8 @@ for e in range(args.n_epochs_stud):
         avg_loss = 0.0
         correct, total = 0.0, 0.0
         for i, data in enumerate(buffer_loader):
+                if args.debug_mode and i>3:
+                       break
                 inputs, labels = data
                 inputs, labels = inputs.to(device), labels.to(device)
                 with torch.no_grad(): logits = model(inputs)
@@ -400,7 +436,15 @@ for e in range(args.n_epochs_stud):
                 _, pred = torch.max(outputs.data, 1)
                 correct += torch.sum(pred == labels).item()
                 total += labels.shape[0]
-                logits_loss = F.mse_loss(outputs, logits)
+                
+                # the distillation loss
+                if args.distillation_type=='vanilla':
+                       logits_loss = vanilla_distillation(outputs, logits)
+                elif args.distillation_type=='topK':
+                       logits_loss = topK_distillation(outputs, logits, K=args.K)
+                elif args.distillation_type=='inner':
+                       logits_loss = inner_distillation(activation_student, activation_teacher)
+                # the labels loss 
                 if args.MSE: 
                       labels_loss = F.mse_loss(outputs, F.one_hot(labels, num_classes=1000).to(torch.float) * LOGITS_MAGNITUDE_TEACHER)  # Bobby's correction
                 else:
