@@ -208,6 +208,8 @@ setproctitle.setproctitle('{}_{}_{}'.format("resnet50", args.buffer_size if 'buf
 
 # start the training 
 print(args)
+os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"]=",".join([str(d) for d in args.gpus_id])
 if not args.nowand:
         assert wandb is not None, "Wandb not installed, please install it or run without wandb"
         if args.wandb_name is None: 
@@ -216,7 +218,7 @@ if not args.nowand:
         wandb.init(project=args.wandb_project, entity=args.wandb_entity, 
                         name=name, notes=args.notes, config=vars(args)) 
         args.wandb_url = wandb.run.get_url()
-device = get_device(args.gpus_id) # returns the first device in the list
+device = get_device([0]) # returns the first device in the list
 if args.distributed=='dp': 
       print(f"Parallelising training on {len(args.gpus_id)} GPUs.") 
       model = torch.nn.DataParallel(model, device_ids=args.gpus_id).cuda()
@@ -367,7 +369,7 @@ start = time.time()
 buffer_model = resnet50(weights=None)
 if args.distributed=='dp': 
       print(f"Parallelising buffer training on {len(args.gpus_id)} GPUs.")
-      buffer_model = torch.nn.DataParallel(buffer_model, device_ids=args.gpus_id).cuda()
+      buffer_model = torch.nn.DataParallel(buffer_model, device_ids=args.gpus_id).to(device)
 buffer_model.to(device)
 buffer_model.train()
 val_loader = DataLoader(val_dataset, batch_size=args.batch_size, 
