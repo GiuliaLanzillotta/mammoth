@@ -12,12 +12,12 @@ sys.path.append(mammoth_path + '/backbone')
 sys.path.append(mammoth_path + '/models')
 sys.path.append(mammoth_path + '/utils')
 
-SEEDS = [11, 13,21,33,55]#,5,138,228,196,118]#[11,13]#
+SEEDS = [11,13,21,33,55]#,5,138,228,196,118]#[11,13]#
 BUFFER_SIZES = [60000]#[480000]#, 480000]#[60000]#[360000, 480000] #1200, 12000, 60000
-K = [10, 50, 200, 500]
+K = [10, 50, 100, 200, 500]
 #NUM_GPUS_PER_COMMAND = 2 
-PARALLEL_ORDER = 3
-GPUIDS = [0, 3, 4]
+PARALLEL_ORDER = 4
+GPUIDS = [0, 1, 2, 3]
 
 def crange(start, end, modulo):
     # implementing circular range
