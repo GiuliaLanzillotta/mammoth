@@ -39,11 +39,52 @@ def inner_distillation(student_net:DictionaryNet, teacher_activations, x):
         x = act_t
     return loss/count #average across depth
 
+
+def kernel_inner_distillation(student_net:DictionaryNet, teacher_activations, x):
+    """ Distillation comparing the feature kernels of all network's layers. """
+    loss = 0.
+    count = 0
+    B = x.shape[0] # batch size
+    for n, act_s in teacher_activations.items(): 
+        if n=='fc': x = torch.flatten(x, 1)
+        act_t = teacher_activations[n] # it will throw an error if the two networks are different
+        act_s = student_net(x, name=n)
+        At = act_t.view(B,-1)
+        At = torch.div(At, At.norm(dim=1).view(B,1))
+        ker_t = torch.matmul(At, At.T)
+        act_s = student_net(x, name=n)
+        As = act_s.view(B,-1)
+        As = torch.div(As, As.norm(dim=1).view(B,1))
+        ker_s = torch.matmul(As, As.T)
+        loss += F.mse_loss(ker_t, ker_s)
+        count+=1
+        x = act_t
+    return loss/count #average across depth
+
+
+def kernel_inner_distillation_free(student_activations, teacher_activations):
+    """ Distillation comparing the feature kernels of all network's layers. """
+    loss = 0.
+    count = 0
+    for n, act_s in teacher_activations.items(): 
+        act_t = teacher_activations[n] # it will throw an error if the two networks are different
+        act_s = student_activations[n]
+        if not count: B = act_t.shape[0] # register batch size at the beginning
+        At = act_t.view(B,-1)
+        At = torch.div(At, At.norm(dim=1).view(B,1))
+        ker_t = torch.matmul(At, At.T)
+        As = act_s.view(B,-1)
+        As = torch.div(As, As.norm(dim=1).view(B,1))
+        ker_s = torch.matmul(As, As.T)
+        loss += F.mse_loss(ker_t, ker_s)
+        count+=1
+    return loss/count #average across depth
+
 def topbottomK_distillation(student_out, teacher_out, K):
     """ Distillation comparing the top-K and bottom-K last layer activations, 
     where the ordering is based on the teacher's network predictions.
     """
-    k = K//2 # we use
+    k = K//2 # we use half for each side
     _, ordered_idx = torch.sort(teacher_out.clone().detach(), descending=True)
     teach_topk = torch.gather(teacher_out, dim = 1, index = ordered_idx)[:,:k]
     teach_bottomk = torch.gather(teacher_out, dim = 1, index = ordered_idx)[:,-k:]
