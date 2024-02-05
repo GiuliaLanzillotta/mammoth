@@ -54,7 +54,7 @@ for buf_size in BUFFER_SIZES:
                 # gpu_count=next_gpu
                 all_commands.append(" ".join(new_argv[1:]))
                 if job_count==PARALLEL_ORDER:
-                    subprocess.run(["utils/run_multiple_commands.sh"]+all_commands)
+                    subprocess.run(["utils/run_commands.sh"]+all_commands)
                     all_commands=[]
                     job_count=0
 

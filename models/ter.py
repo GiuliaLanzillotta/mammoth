@@ -6,7 +6,7 @@ from utils.args import add_management_args, add_experiment_args, add_rehearsal_a
 from utils.buffer import Buffer
 from utils.ring_buffer import RingBuffer
 
-from datasets import get_dataset
+from continualdatasets import get_dataset
 
 
 def get_parser() -> ArgumentParser:

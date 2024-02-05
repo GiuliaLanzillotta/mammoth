@@ -6,7 +6,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from datasets import get_dataset
+from continualdatasets import get_dataset
 from torch.optim import SGD
 
 from utils.args import add_management_args, add_experiment_args, ArgumentParser

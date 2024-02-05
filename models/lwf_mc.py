@@ -6,7 +6,7 @@
 from copy import deepcopy
 import torch
 import torch.nn.functional as F
-from datasets import get_dataset
+from continualdatasets import get_dataset
 from utils.args import *
 from models.utils.continual_model import ContinualModel
 import numpy as np

@@ -7,7 +7,7 @@ import math
 
 import numpy as np
 import torch
-from datasets.utils.validation import ValidationDataset
+from continualdatasets.utils.validation import ValidationDataset
 from torch.optim import SGD
 from torchvision import transforms
 

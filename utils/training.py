@@ -9,8 +9,8 @@ from argparse import Namespace
 from typing import Tuple
 
 import torch
-from datasets import get_dataset
-from datasets.utils.continual_dataset import ContinualDataset
+from continualdatasets import get_dataset
+from continualdatasets.utils.continual_dataset import ContinualDataset
 from models.utils.continual_model import ContinualModel
 
 from utils.loggers import *
@@ -93,7 +93,7 @@ def train(model: ContinualModel, dataset: ContinualDataset,
             name = str.join("-",[dataset.SETTING, dataset.NAME, model.NAME, args.conf_timestamp])
         else: name = args.wandb_name
         wandb.init(project=args.wandb_project, entity=args.wandb_entity, 
-                   name=name, notes=args.notes, config=vars(args)) #TODO: filtering config variables
+                   name=name, notes=args.notes, config=vars(args)) 
         args.wandb_url = wandb.run.get_url()
 
     model.net.to(model.device)

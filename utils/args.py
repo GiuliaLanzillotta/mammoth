@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from argparse import ArgumentParser
-from datasets import NAMES as DATASET_NAMES
+from continualdatasets import NAMES as DATASET_NAMES
 from models import get_all_models
 
 
@@ -42,8 +42,6 @@ def add_management_args(parser: ArgumentParser) -> None:
                         help='GPU devices identifier. Empty list means CPU only.')
     parser.add_argument('--seed', type=int, default=None,
                         help='The random seed.')
-    # parser.add_argument('--all_seeds', default=False, action="store_true",
-    #                     help='Runs the same experiment with 10 different random seeds.')
     parser.add_argument('--notes', type=str, default=None,
                         help='Notes for this run.')
     parser.add_argument('--non_verbose', default=0, choices=[0, 1], type=int, help='Make progress bars non verbose')
@@ -55,9 +53,9 @@ def add_management_args(parser: ArgumentParser) -> None:
                         help='disable additional metrics')
     parser.add_argument('--debug_mode', type=int, default=0, help='Run only a few forward steps per epoch')
     parser.add_argument('--nowand', default=0, choices=[0, 1], type=int, help='Inhibit wandb logging')
-    #TODO 
+
     parser.add_argument('--wandb_entity', type=str, default='continually', help='Wandb entity')
-    parser.add_argument('--wandb_project', type=str, default='mammoth', help='Wandb project name')
+    parser.add_argument('--wandb_project', type=str, default='localcontinuallearning', help='Wandb project name')
     parser.add_argument('--wandb_name', type=str, default=None, help='Wandb run name')
 
 

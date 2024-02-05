@@ -22,11 +22,6 @@ def get_parser() -> ArgumentParser:
     add_management_args(parser)
     add_experiment_args(parser)
     add_rehearsal_args(parser)
-    # remove minibatch_size from parser
-    for i in range(len(parser._actions)):
-        if parser._actions[i].dest == 'minibatch_size':
-            del parser._actions[i]
-            break
 
     parser.add_argument('--gamma', type=float, default=None,
                         help='Margin parameter for GEM.')

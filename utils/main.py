@@ -3,6 +3,10 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+
+# example command 
+# python main.py --model gem --dataset seq-cifar10 --buffer_size 200 --load_best_args --lr 0.04 --seed 11 --gpus_id 0 --notes testrun 
+
 import numpy  # needed (don't change it)
 import importlib
 import os
@@ -10,11 +14,11 @@ import socket
 import sys
 
 
-mammoth_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(mammoth_path)
-sys.path.append(mammoth_path + '/datasets')
-sys.path.append(mammoth_path + '/backbone')
-sys.path.append(mammoth_path + '/models')
+path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(path)
+sys.path.append(path + '/continualdatasets')
+sys.path.append(path + '/backbone')
+sys.path.append(path + '/models')
 
 import datetime
 import uuid
@@ -22,13 +26,13 @@ from argparse import ArgumentParser
 
 import setproctitle
 import torch
-from datasets import NAMES as DATASET_NAMES
-from datasets import ContinualDataset, get_dataset
+from continualdatasets import NAMES as DATASET_NAMES
+from continualdatasets import ContinualDataset, get_dataset
 from models import get_all_models, get_model
 
 from utils.args import add_management_args
 from utils.best_args import best_args
-from utils.conf import set_random_seed
+from utils.conf import set_random_seed, WANDBKEY
 from utils.continual_training import train as ctrain
 from utils.distributed import make_dp
 from utils.training import train
@@ -49,7 +53,6 @@ def parse_args():
     parser.add_argument('--load_best_args', action='store_true',
                         help='Loads the best arguments for each method, '
                              'dataset and memory buffer.')
-    #TODO 
     torch.set_num_threads(4)
     add_management_args(parser)
     args = parser.parse_known_args()[0]
@@ -94,8 +97,10 @@ def main(args=None):
     if args is None:
         args = parse_args()
 
-    os.putenv("MKL_SERVICE_FORCE_INTEL", "1") #CHECK
+    os.putenv("MKL_SERVICE_FORCE_INTEL", "1") 
     os.putenv("NPY_MKL_FORCE_INTEL", "1")
+    os.putenv('WANDB_API_KEY', WANDBKEY)
+
 
     # Add uuid, timestamp and hostname for logging
     args.conf_jobnum = str(uuid.uuid4())
