@@ -15,6 +15,7 @@ from models.utils.continual_model import ContinualModel
 
 from utils.loggers import *
 from utils.status import ProgressBar
+from utils.conf import base_path_checkpoints
 
 try:
     import wandb
@@ -159,15 +160,27 @@ def train(model: ContinualModel, dataset: ContinualDataset,
 
 
         if hasattr(model, 'end_task'):
-            # TODO add saving model here?
             model.end_task(dataset)
-
+        
         accs = evaluate(model, dataset)
         results.append(accs[0])
         results_mask_classes.append(accs[1])
 
         mean_acc = np.mean(accs, axis=1)
         print_mean_accuracy(mean_acc, t + 1, dataset.SETTING)
+
+        if args.savecheckpoints: 
+            state = {
+                'epoch': model.args.n_epochs,
+                'task': t, 
+                'state_dict': model.state_dict(),
+                'acc': mean_acc}
+            path = base_path_checkpoints() +  \
+                dataset.SETTING + "/" + \
+                    dataset.NAME + "/" + \
+                        model.NAME + f"/task{t}_seed{args.seed}_model.ckpt" 
+            model.save_checkpoint(state=state, path=path)
+
 
         if not args.disable_log:
             logger.log(mean_acc)

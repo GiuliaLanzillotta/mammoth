@@ -118,9 +118,9 @@ def store_masked_loaders(train_dataset: Dataset, test_dataset: Dataset,
     test_dataset.targets = np.array(test_dataset.targets)[test_mask]
 
     train_loader = DataLoader(train_dataset,
-                              batch_size=setting.args.batch_size, shuffle=True, num_workers=4)
+                              batch_size=setting.args.batch_size, shuffle=True, num_workers=1)
     test_loader = DataLoader(test_dataset,
-                             batch_size=setting.args.batch_size, shuffle=False, num_workers=4)
+                             batch_size=setting.args.batch_size, shuffle=False, num_workers=1)
     setting.test_loaders.append(test_loader)
     setting.train_loader = train_loader
 

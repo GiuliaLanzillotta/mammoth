@@ -596,7 +596,7 @@ best_args = {
                                   'n_epochs': 50}},
                     'gem': {200: {'lr': 0.03,
                                   'gamma': 0.5,
-                                  'batch_size': 32,
+                                  'batch_size': 16,
                                   'n_epochs': 50},
                             500: {'lr': 0.03, 'gamma': 0.5,
                                   'batch_size': 32,

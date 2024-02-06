@@ -32,10 +32,16 @@ def base_path() -> str:
 
 def base_path_dataset() -> str:
     """
-    Returns the base path where to log accuracies and tensorboard data.
+    Returns the base path where to store data.
     """
     return '/cluster/scratch/glanzillo/imagedatasets/'
 
+
+def base_path_checkpoints() -> str:
+    """
+    Returns the base path where to find checkpoints.
+    """
+    return '/cluster/scratch/glanzillo/LCL/checkpoints/'
 
 def set_random_seed(seed: int) -> None:
     """

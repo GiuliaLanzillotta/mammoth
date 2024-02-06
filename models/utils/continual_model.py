@@ -9,6 +9,7 @@ from argparse import Namespace
 from contextlib import suppress
 from typing import List
 
+import os
 import torch
 import torch.nn as nn
 from torch.optim import SGD
@@ -74,38 +75,6 @@ class ContinualModel(nn.Module):
         """
         raise NotImplementedError
 
-    # def train_on_task(self, train_loader:DataLoader, 
-    #                   scheduler:torch.optim.lr_scheduler._LRScheduler, 
-    #                   progress_bar:ProgressBar): 
-    #     """
-    #     Compute a full training cycle through a task. 
-    #     :param train_loader: training data loader
-    #     :param 
-    #     """
-    #     for epoch in range(self.args.n_epochs):
-    #         if self.args.model == 'joint':
-    #             continue
-    #         for i, data in enumerate(train_loader):
-    #             if self.args.debug_mode and i > 3: # only 3 batches in debug mode
-    #                 break
-    #             if hasattr(train_loader.dataset, 'logits'):
-    #                 inputs, labels, not_aug_inputs, logits = data
-    #                 inputs = inputs.to(self.device)
-    #                 labels = labels.to(self.device)
-    #                 not_aug_inputs = not_aug_inputs.to(self.device)
-    #                 logits = logits.to(self.device)
-    #                 loss = self.meta_observe(inputs, labels, not_aug_inputs, logits)
-    #             else:
-    #                 inputs, labels, not_aug_inputs = data
-    #                 inputs, labels = inputs.to(self.device), labels.to(self.device)
-    #                 not_aug_inputs = not_aug_inputs.to(self.device)
-    #                 loss = self.meta_observe(inputs, labels, not_aug_inputs)
-    #             assert not math.isnan(loss)
-    #             progress_bar.prog(i, len(train_loader), epoch, t, loss)
-
-    #         if scheduler is not None:
-    #             scheduler.step()
-
     def autolog_wandb(self, locals):
         """
         All variables starting with "_wandb_" or "loss" in the observe function
@@ -114,3 +83,19 @@ class ContinualModel(nn.Module):
         if not self.args.nowand and not self.args.debug_mode:
             wandb.log({k: (v.item() if isinstance(v, torch.Tensor) and v.dim() == 0 else v)
                       for k, v in locals.items() if k.startswith('_wandb_') or k.startswith('loss')})
+
+    def save_checkpoint(self, state, path):
+        """
+        Saves a checkpoint of the network state at the moment it is called
+        """
+        print(f"Saving checkpoint {path}")
+        if not os.path.exists(path): os.makedirs(path)
+        torch.save(state, path)
+
+    
+    def load_checkpoint(self, path, device):
+        if os.path.exists(path):
+          print(f"Loading existing checkpoint {path}")
+          checkpoint = torch.load(path, map_location=device)
+          return checkpoint
+        return None

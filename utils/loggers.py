@@ -9,6 +9,7 @@ import sys
 from typing import Any, Dict
 
 import numpy as np
+import json
 
 from utils import create_if_not_exists
 from utils.conf import base_path
@@ -161,9 +162,9 @@ class Logger:
                              "/" + self.dataset + "/" + self.model)
 
         path = target_folder + self.setting + "/" + self.dataset\
-            + "/" + self.model + "/logs.pyd"
+            + "/" + self.model + "/logs.txt"
         with open(path, 'a') as f:
-            f.write(str(wrargs) + '\n')
+            f.write(json.dumps(wrargs) + '\n')
 
         if self.setting == 'class-il':
             create_if_not_exists(os.path.join(*[target_folder, "task-il/", self.dataset]))
@@ -182,6 +183,6 @@ class Logger:
             wrargs['forgetting'] = self.forgetting_mask_classes
 
             path = target_folder + "task-il" + "/" + self.dataset + "/"\
-                + self.model + "/logs.pyd"
+                + self.model + "/logs.txt"
             with open(path, 'a') as f:
-                f.write(str(wrargs) + '\n')
+                f.write(json.dumps(wrargs) + '\n')
