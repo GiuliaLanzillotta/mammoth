@@ -40,12 +40,15 @@ def print_mean_accuracy(mean_acc: np.ndarray, task_number: int,
 
 class Logger:
     def __init__(self, setting_str: str, dataset_str: str,
-                 model_str: str) -> None:
+                 model_str: str, n_parameters:int=0) -> None:
         self.accs = []
         self.fullaccs = []
         if setting_str == 'class-il':
             self.accs_mask_classes = []
             self.fullaccs_mask_classes = []
+        self.updates_norms = []
+        self.all_updates_norms = []
+        self.parameter_norms = []
         self.setting = setting_str
         self.dataset = dataset_str
         self.model = model_str
@@ -55,6 +58,7 @@ class Logger:
         self.bwt_mask_classes = None
         self.forgetting = None
         self.forgetting_mask_classes = None
+        self.N = n_parameters
 
     def dump(self):
         dic = {
@@ -65,7 +69,7 @@ class Logger:
             'forgetting': self.forgetting,
             'fwt_mask_classes': self.fwt_mask_classes,
             'bwt_mask_classes': self.bwt_mask_classes,
-            'forgetting_mask_classes': self.forgetting_mask_classes,
+            'forgetting_mask_classes': self.forgetting_mask_classes
         }
         if self.setting == 'class-il':
             dic['accs_mask_classes'] = self.accs_mask_classes
@@ -129,6 +133,15 @@ class Logger:
             self.accs.append(mean_acc_class_il)
             self.accs_mask_classes.append(mean_acc_task_il)
 
+    def log_distances(self, distances: list) -> None: 
+        """
+        Logs distances in parameter space. 
+        :distances: (update norm, overall update norm, parameter norm)
+        """
+        self.updates_norms.append(distances[0])
+        self.all_updates_norms.append(distances[1])
+        self.parameter_norms.append(distances[2])
+
     def log_fullacc(self, accs):
         if self.setting == 'class-il':
             acc_class_il, acc_task_il = accs
@@ -149,9 +162,16 @@ class Logger:
             for j, acc in enumerate(fa):
                 wrargs['accuracy_' + str(j + 1) + '_task' + str(i + 1)] = acc
 
+        for i, d in enumerate(self.updates_norms):
+            wrargs[f'update_{i+1}_norm'] = d
+            wrargs[f'all_updates_{i+1}_norm'] = self.all_updates_norms[i]
+            wrargs[f'parameters_{i+1}_norm'] = self.parameter_norms[i]
+
         wrargs['forward_transfer'] = self.fwt
         wrargs['backward_transfer'] = self.bwt
         wrargs['forgetting'] = self.forgetting
+
+        wrargs['n_parameters'] = self.N
 
         target_folder = base_path() + "results/"
 
@@ -166,7 +186,7 @@ class Logger:
         with open(path, 'a') as f:
             f.write(json.dumps(wrargs) + '\n')
 
-        if self.setting == 'class-il':
+        if self.setting == 'class-il': # adding task-il metrics
             create_if_not_exists(os.path.join(*[target_folder, "task-il/", self.dataset]))
             create_if_not_exists(target_folder + "task-il/"
                                  + self.dataset + "/" + self.model)
@@ -177,6 +197,11 @@ class Logger:
             for i, fa in enumerate(self.fullaccs_mask_classes):
                 for j, acc in enumerate(fa):
                     wrargs['accuracy_' + str(j + 1) + '_task' + str(i + 1)] = acc
+
+            for i, d in enumerate(self.updates_norms):
+                wrargs[f'update_{i+1}_norm'] = d
+                wrargs[f'all_updates_{i+1}_norm'] = self.all_updates_norms[i]
+                wrargs[f'parameters_{i+1}_norm'] = self.parameter_norms[i]
 
             wrargs['forward_transfer'] = self.fwt_mask_classes
             wrargs['backward_transfer'] = self.bwt_mask_classes

@@ -19,6 +19,7 @@ from utils.magic import persistent_locals
 from utils.status import ProgressBar
 
 from torch.utils.data import DataLoader
+from torch.nn.utils.convert_parameters import parameters_to_vector, vector_to_parameters
 
 
 with suppress(ImportError):
@@ -42,9 +43,23 @@ class ContinualModel(nn.Module):
         self.transform = transform
         self.opt = SGD(self.net.parameters(), lr=self.args.lr)
         self.device = get_device(args.gpus_id)
+        self.net_status = None
 
         if not self.NAME or not self.COMPATIBILITY:
             raise NotImplementedError('Please specify the name and the compatibility of the model.')
+
+    def update_status(self):
+        """
+        Storing the current network parameters in a vector and computing distance to previous parameter values.
+        """
+        w = parameters_to_vector(self.net.parameters()).detach()
+        if self.net_status is not None: 
+            w_old = self.net_status
+            distance = torch.linalg.vector_norm(w-w_old, ord=2).item()
+        else: distance = 0
+        self.net_status = w
+        return w, distance
+        
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -84,13 +99,13 @@ class ContinualModel(nn.Module):
             wandb.log({k: (v.item() if isinstance(v, torch.Tensor) and v.dim() == 0 else v)
                       for k, v in locals.items() if k.startswith('_wandb_') or k.startswith('loss')})
 
-    def save_checkpoint(self, state, path):
+    def save_checkpoint(self, state, path, name):
         """
         Saves a checkpoint of the network state at the moment it is called
         """
-        print(f"Saving checkpoint {path}")
+        print(f"Saving checkpoint {path+name}")
         if not os.path.exists(path): os.makedirs(path)
-        torch.save(state, path)
+        torch.save(state, path+name)
 
     
     def load_checkpoint(self, path, device):
