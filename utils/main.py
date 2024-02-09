@@ -5,7 +5,9 @@
 
 
 # example command 
-# python main.py --model gem --dataset seq-cifar10 --buffer_size 200 --load_best_args --lr 0.04 --seed 11 --gpus_id 0 --notes testrun 
+# python utils/main.py --model gem --dataset seq-cifar10 --buffer_size 200 --load_best_args --lr 0.04 --seed 11 --gpus_id 0 --notes testrun 
+# python utils/main.py --model ogd --dataset seq-cifar10 --buffer_size 200 --load_best_args --seed 11 --gpus_id 0 --notes testrun 
+
 
 import numpy  # needed (don't change it)
 import importlib
@@ -101,6 +103,7 @@ def main(args=None):
     os.putenv("NPY_MKL_FORCE_INTEL", "1")
     os.putenv('WANDB_API_KEY', WANDBKEY)
 
+    torch.set_default_dtype(torch.float32)
 
     # Add uuid, timestamp and hostname for logging
     args.conf_jobnum = str(uuid.uuid4())

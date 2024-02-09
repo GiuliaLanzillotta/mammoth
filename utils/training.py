@@ -186,7 +186,7 @@ def train(model: ContinualModel, dataset: ContinualDataset,
                 dataset.SETTING + "/" + \
                     dataset.NAME + "/" + \
                         model.NAME
-            model.save_checkpoint(state=state, path=path, name= f"/task{t}_seed{args.seed}_model.pt" )
+            model.save_checkpoint(state=state, path=path, task=t)
 
 
         if not args.disable_log:
