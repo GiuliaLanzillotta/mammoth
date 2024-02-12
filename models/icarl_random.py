@@ -5,6 +5,7 @@
 
 from copy import deepcopy
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from continualdatasets import get_dataset
@@ -80,11 +81,13 @@ def fill_buffer(self, mem_buffer: Buffer, dataset, t_idx: int) -> None:
     for _y in a_y.unique():
         idx = (a_y == _y)
         _x, _y, _l = a_x[idx], a_y[idx], a_l[idx]
-        
+    
+        random_indices = np.random.choice(list(range(_x.size(0))), size=samples_per_class, replace=False)
+
         mem_buffer.add_data(
-            examples=_x[:samples_per_class].to(self.device),
-            labels=_y[:samples_per_class].to(self.device),
-            logits=_l[:samples_per_class].to(self.device)
+            examples=_x[random_indices].to(self.device),
+            labels=_y[random_indices].to(self.device),
+            logits=_l[random_indices].to(self.device)
         )
 
     assert len(mem_buffer.examples) <= mem_buffer.buffer_size
