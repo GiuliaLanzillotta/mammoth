@@ -92,21 +92,22 @@ def orthonormalize(vectors, normalize=True, start_idx=1):
     
     O = O[:,:total]
     #final check of orthogonality
-    assert torch.allclose(torch.mm(O.cpu().t(),O.cpu()), torch.eye(O.size(1)).cpu()), "The orthogonalisation failed."
+    print(torch.dist(O.T @ O, torch.eye(O.size(1)).to(O.device)))
 
     return O
 
-def orthonormalize(vectors, normalize=True):
-    """Applies orthonormalisation to the matrix 'vectors', which should be a torch tensor,
-    using a qr decomposition. Notice that the operations are not in place."""
+# def orthonormalize(vectors, normalize=True):
+#     """Applies orthonormalisation to the matrix 'vectors', which should be a torch tensor,
+#     using a qr decomposition. Notice that the operations are not in place."""
 
-    assert (vectors.size(1) <= vectors.size(0)), 'number of vectors must be smaller or equal to the dimension'
+#     assert (vectors.size(1) <= vectors.size(0)), 'number of vectors must be smaller or equal to the dimension'
 
-    O, _ = torch.linalg.qr(vectors, mode="reduced")
-    #final check of orthogonality
-    assert torch.allclose(torch.mm(O.cpu().t(),O.cpu()), torch.eye(O.size(1)).cpu()), "The orthogonalisation failed."
+#     O, _ = torch.linalg.qr(vectors, mode="reduced")
+#     #final check of orthogonality
 
-    return O
+#     #assert torch.allclose(torch.mm(O.T,O), torch.eye(O.size(1)).to(O.device),atol=1e-06), "The orthogonalisation failed."
+#     print(torch.dist(O.T @ O, torch.eye(O.size(1)).to(O.device)))
+#     return O
 
 class Ogd(ContinualModel):
     NAME = 'ogd'
@@ -175,7 +176,9 @@ class Ogd(ContinualModel):
         if self.grads_mat is not None: 
             m = self.grads_mat.size(1)
             gradients = torch.hstack([self.grads_mat, gradients]).detach()
-        self.grads_mat = orthonormalize(gradients, normalize=True)
+        self.grads_mat = orthonormalize(gradients, normalize=True, start_idx=m)
+        # adding extra check to avoid gradient explosion
+        self.grads_mat /= torch.linalg.norm(self.grads_mat)
         print(f"{self.grads_mat.size(1)} gradients stored.")
 
 

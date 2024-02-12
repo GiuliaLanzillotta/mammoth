@@ -16,6 +16,7 @@ SEEDS = [11,13,21,33,55]
 LR = [0.0001, 0.001, 0.01, 0.05, 0.1]
 PARALLEL_ORDER = 4
 GPUIDS = [0, 1, 2, 3]
+SAVE_CHKPTS = False
 
 def crange(start, end, modulo):
     # implementing circular range
@@ -40,7 +41,7 @@ for lr in LR:
         new_argv.append(f'--seed {seed} ')
         new_argv.append(f'--lr {lr}')
         new_argv.append(f'--gpus_id {GPUIDS[job_count]}')
-        if seed in [11,13]: 
+        if seed in [11,13] and SAVE_CHKPTS: 
                 new_argv.append('--savecheckpoints')
 
         gpu_idx = job_count % len(GPUIDS)

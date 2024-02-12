@@ -28,6 +28,8 @@ def add_experiment_args(parser: ArgumentParser) -> None:
                         help='optimizer momentum.')
     parser.add_argument('--optim_nesterov', type=int, default=0,
                         help='optimizer nesterov momentum.')
+    parser.add_argument('--softmax_temp', type=float, default=1,
+                        help='softmax temperature (for distillation)')
 
     parser.add_argument('--n_epochs', type=int,
                         help='Batch size.')

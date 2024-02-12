@@ -99,8 +99,10 @@ def train(model: ContinualModel, dataset: ContinualDataset,
 
     model.net.to(model.device)
     results, results_mask_classes, distances = [], [], []
-    w_init, _ = model.update_status() # saving initialisation
-    num_parameters = w_init.shape[0]
+    if model.NAME != 'pnn': 
+        w_init, _ = model.update_status() # saving initialisation
+        num_parameters = w_init.shape[0]
+    else: num_parameters=-1
 
     if not args.disable_log:
         logger = Logger(dataset.SETTING, dataset.NAME, model.NAME, n_parameters=num_parameters)
@@ -112,7 +114,7 @@ def train(model: ContinualModel, dataset: ContinualDataset,
         for t in range(dataset.N_TASKS):
             model.net.train()
             _, _ = dataset_copy.get_data_loaders()
-        if model.NAME != 'icarl' and model.NAME != 'pnn':
+        if model.NAME not in ['icarl','icarl_random'] and model.NAME != 'pnn':
             random_results_class, random_results_task = evaluate(model, dataset_copy)
 
     print(file=sys.stderr)
@@ -164,19 +166,20 @@ def train(model: ContinualModel, dataset: ContinualDataset,
         if hasattr(model, 'end_task'):
             model.end_task(dataset)
         
-        w, d = model.update_status()
-        d_init = torch.linalg.vector_norm(w-w_init,ord=2).item()
-        w_norm = torch.linalg.vector_norm(w, ord=2).item()
+        if model.NAME != 'pnn': 
+            w, d = model.update_status()
+            d_init = torch.linalg.vector_norm(w-w_init,ord=2).item()
+            w_norm = torch.linalg.vector_norm(w, ord=2).item()
+            distances.append(d)
 
         accs = evaluate(model, dataset)
         results.append(accs[0])
         results_mask_classes.append(accs[1])
-        distances.append(d)
 
         mean_acc = np.mean(accs, axis=1)
         print_mean_accuracy(mean_acc, t + 1, dataset.SETTING)
 
-        if args.savecheckpoints: 
+        if args.savecheckpoints and model.NAME != 'pnn': 
             state = {
                 'epoch': model.args.n_epochs,
                 'task': t, 
@@ -192,7 +195,8 @@ def train(model: ContinualModel, dataset: ContinualDataset,
         if not args.disable_log:
             logger.log(mean_acc)
             logger.log_fullacc(accs)
-            logger.log_distances([d,d_init,w_norm])
+            if model.NAME != 'pnn': 
+                logger.log_distances([d,d_init,w_norm])
 
         buffer_tp = None
         if hasattr(model, 'Buffer') or hasattr(model, 'buffer'):
@@ -206,8 +210,8 @@ def train(model: ContinualModel, dataset: ContinualDataset,
 
             if buffer_tp is not None: 
                 d2.update(**{f'BUFFER_TASK_prop_{i}': p for (i,p) in enumerate(buffer_tp)})
-
-            d2.update({"Update_norm":d, "Overall_Update_norm":d_init, "Parameters_norm":w_norm})
+            if model.NAME != 'pnn': 
+                d2.update({"Update_norm":d, "Overall_Update_norm":d_init, "Parameters_norm":w_norm})
 
             wandb.log(d2)
 
@@ -215,7 +219,7 @@ def train(model: ContinualModel, dataset: ContinualDataset,
     if not args.disable_log and not args.ignore_other_metrics:
         logger.add_bwt(results, results_mask_classes)
         logger.add_forgetting(results, results_mask_classes)
-        if model.NAME != 'icarl' and model.NAME != 'pnn':
+        if model.NAME not in ['icarl','icarl_random'] and model.NAME != 'pnn':
             logger.add_fwt(results, random_results_class,
                     results_mask_classes, random_results_task)
 

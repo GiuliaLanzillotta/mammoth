@@ -44,7 +44,7 @@ class Pnn(nn.Module):
         self.loss = loss
         self.args = args
         self.transform = transform
-        self.device = get_device()
+        self.device = get_device(args.gpus_id)
         self.x_shape = None
         self.nets = [get_backbone(backbone).to(self.device)]
         self.net = self.nets[-1]
@@ -78,7 +78,7 @@ class Pnn(nn.Module):
         self.net = self.nets[-1]
         self.opt = optim.SGD(self.net.parameters(), lr=self.args.lr)
 
-    def observe(self, inputs, labels, not_aug_inputs):
+    def meta_observe(self, inputs, labels, not_aug_inputs):
         if self.x_shape is None:
             self.x_shape = inputs.shape
 
