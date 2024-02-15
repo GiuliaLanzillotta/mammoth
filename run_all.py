@@ -12,8 +12,9 @@ from copy import copy
 import subprocess
 
 
+LR = [0.0001, 0.001, 0.005, 0.01, 0.05, 0.1]
+#LR = [0.01, 0.05, 0.1]
 SEEDS = [11,13,21,33,55]
-LR = [0.0001, 0.001, 0.01, 0.05, 0.1]
 PARALLEL_ORDER = 4
 GPUIDS = [0, 1, 2, 3]
 SAVE_CHKPTS = False
