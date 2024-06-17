@@ -34,14 +34,14 @@ def base_path_dataset() -> str:
     """
     Returns the base path where to store data.
     """
-    return '/cluster/scratch/glanzillo/imagedatasets/'
+    return '/media/hofmann-scratch/glanzillo/mammoth/data/'
 
 
 def base_path_checkpoints() -> str:
     """
     Returns the base path where to find checkpoints.
     """
-    return '/cluster/scratch/glanzillo/LCL/checkpoints/'
+    return '/media/hofmann-scratch/glanzillo/mammoth/logs/chkpts/'
 
 def set_random_seed(seed: int) -> None:
     """

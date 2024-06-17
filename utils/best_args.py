@@ -176,6 +176,7 @@ best_args = {
                      'n_epochs': 1}}},
     'rot-mnist': {
         'sgd': {-1: {'lr': 0.2, 'batch_size': 128, 'n_epochs': 1}},
+        'sgd_stable': {-1: {'lr': 0.1, 'batch_size': 10, 'n_epochs': 1, 'dropout':0.5, 'lr_decay':0.8}},
         'ewc_on': {-1: {'lr': 0.1,
                         'e_lambda': 0.7,
                         'gamma': 1.0,

@@ -3,6 +3,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import torch
 import torch.nn.functional as F
 import torchvision.transforms as transforms
 from backbone.MNISTMLP import MNISTMLP
@@ -25,7 +26,7 @@ class RotatedMNIST(ContinualDataset):
 
     @staticmethod
     def get_backbone():
-        return MNISTMLP(28 * 28, RotatedMNIST.N_CLASSES_PER_TASK)
+        return MNISTMLP(28 * 28, RotatedMNIST.N_CLASSES_PER_TASK, dropout=0)
 
     @staticmethod
     def get_transform():
@@ -45,6 +46,8 @@ class RotatedMNIST(ContinualDataset):
 
     @staticmethod
     def get_scheduler(model, args):
+        if model.NAME=='sgd_stable':
+            return torch.optim.lr_scheduler.ExponentialLR(model.opt, gamma=args.lr_decay)
         return None
 
     @staticmethod

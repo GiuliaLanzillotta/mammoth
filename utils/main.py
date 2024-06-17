@@ -103,6 +103,7 @@ def main(args=None):
     os.putenv("NPY_MKL_FORCE_INTEL", "1")
     os.putenv('WANDB_API_KEY', WANDBKEY)
 
+
     torch.set_default_dtype(torch.float32)
 
     # Add uuid, timestamp and hostname for logging

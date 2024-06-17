@@ -21,6 +21,8 @@ def add_experiment_args(parser: ArgumentParser) -> None:
 
     parser.add_argument('--lr', type=float, required=True,
                         help='Learning rate.')
+    parser.add_argument('--lr_decay', type=float, default=1.,
+                        help='Learning rate decay rate.')
 
     parser.add_argument('--optim_wd', type=float, default=0.,
                         help='optimizer weight decay.')
@@ -30,6 +32,8 @@ def add_experiment_args(parser: ArgumentParser) -> None:
                         help='optimizer nesterov momentum.')
     parser.add_argument('--softmax_temp', type=float, default=1,
                         help='softmax temperature (for distillation)')
+    parser.add_argument('--dropout', type=float, default=0,
+                        help='Dropout (only implemented in MLPs).')
 
     parser.add_argument('--n_epochs', type=int,
                         help='Batch size.')

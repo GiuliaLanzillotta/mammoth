@@ -45,7 +45,7 @@ def get_Hessian_eigenthings(model, dataloader, n_h_samples, num_eigenthings):
             print('Sample',n_h_samples,' batch for estimating the eigenvectors.')
             random_indices = numpy.random.choice(list(range(n_sample)), size=n_sample, replace=False) # samples indices
             subdata = torch.utils.data.Subset(dataloader.dataset, random_indices) #creating a dataset with these samples
-            dataloader = torch.utils.data.DataLoader(subdata, shuffle=True, num_workers=4, batch_size=128)
+            dataloader = torch.utils.data.DataLoader(subdata, shuffle=True, num_workers=4, batch_size=32)
         else: print('Using the full dataset for estimating the eigenvectors.')
 
         print(f"Computing Hessian first {num_eigenthings} eigenthings")
@@ -57,7 +57,7 @@ def get_Hessian_eigenthings(model, dataloader, n_h_samples, num_eigenthings):
                         full_dataset=True,
                         mode='lanczos', #alternatives: power_iter, lanczos
                         use_gpu=model.device!='gpu',
-                        max_possible_gpu_samples=256, #might be too high for some GPUs
+                        max_possible_gpu_samples=16, #might be too high for some GPUs
                         fp16=False 
                     )
         
@@ -123,27 +123,29 @@ def do_perturbation_analysis(model, dataloader, num_eigenthings=10, test=False):
     L, Q = get_Hessian_eigenthings(model, dataloader, n_h_samples=SAMPLES, num_eigenthings=num_eigenthings)
 
     Q_p = Q[:,:] # only select positive eigenvalues --- why? 
+    Q_p/=(torch.linalg.norm(Q_p, ord=2, dim=0))
     E_delta = apply_perturbations(model, dataloader, Q_p, loss=loss_star, theta_star=theta_star, radiuses=RADIUS, test=test)
     # now random perturbations 
     # random perturbations 
     R_p = torch.randn_like(Q_p)
-    R_p/=(torch.linalg.norm(R_p, ord=2, dim=0)+10e-7)
+    R_p/=(torch.linalg.norm(R_p, ord=2, dim=0))
     E_eta = apply_perturbations(model, dataloader, R_p, loss=loss_star, theta_star=theta_star, radiuses= RADIUS, test=test)
     
     E_delta_df = pd.DataFrame(E_delta, columns=['radius', 'eigen-index', 'E_loss'])
     E_eta_df = pd.DataFrame(E_eta, columns=['radius', 'random-index', 'E_loss_rnd'])
     merge_df = E_delta_df.merge(E_eta_df, how='outer', on="radius")[['radius', 'eigen-index', 'random-index', 'E_loss', 'E_loss_rnd']]
-    merge_df['E_loss_ratio']= merge_df['E_loss']/(merge_df['E_loss_rnd'])
-    merge_df.loc[(merge_df['E_loss'].isna()) & (merge_df['E_loss_rnd'].isna()),'E_loss_ratio'] = 1
-    merge_df.loc[(merge_df['E_loss'].notna()) & (merge_df['E_loss_rnd'].isna()),'E_loss_ratio'] = 0
-    merge_df = merge_df.groupby(['radius','eigen-index']).agg({'E_loss':'mean', 'E_loss_ratio':'mean'}).reset_index()
-    res_df = merge_df[['radius','eigen-index','E_loss','E_loss_ratio']]
+    res_df = merge_df 
+    #merge_df['E_loss_ratio']= merge_df['E_loss']/(merge_df['E_loss_rnd'])
+    #merge_df.loc[(merge_df['E_loss'].isna()) & (merge_df['E_loss_rnd'].isna()),'E_loss_ratio'] = 1
+    #merge_df.loc[(merge_df['E_loss'].notna()) & (merge_df['E_loss_rnd'].isna()),'E_loss_ratio'] = 0
+    #merge_df = merge_df.groupby(['radius','eigen-index']).agg({'E_loss':'mean', 'E_loss_ratio':'mean'}).reset_index()
+    #res_df = merge_df[['radius','eigen-index','E_loss','E_loss_ratio']]
     for i in range(L.size(0)):
         res_df.loc[res_df['eigen-index']==i,'eigen-value'] = L[i].item()
     return res_df
 
 
-columns=['radius','eigen-index','E_loss','E_loss_ratio',
+columns=['radius', 'eigen-index', 'random-index', 'E_loss', 'E_loss_rnd', 'eigen-value',
          'P','seed','task','dataset','model','lr', 'train']
 perturbations_df = pd.DataFrame(columns=columns)
 
@@ -155,6 +157,7 @@ args.batch_size = dataset.get_batch_size()
 backbone = dataset.get_backbone()
 loss = dataset.get_loss()
 model = get_model(args, backbone, loss, dataset.get_transform())
+print(model)
 # count number of parameters 
 P = parameters_to_vector(model.parameters()).detach().shape[0]
 
@@ -167,6 +170,7 @@ for t in tqdm(range(dataset.N_TASKS)):
     train_loader, test_loader = dataset.get_data_loaders()
     # load checkpoint for the given task 
     chkpt_name = f"/task{t}_{model.name}.pt"
+    print(base_path_chkpts+chkpt_name)
     chkpt = model.load_checkpoint(path=base_path_chkpts+chkpt_name, device=model.device)
     model.net.load_state_dict(chkpt['state_dict'])
     model.net.eval(); model.net.to(model.device)
